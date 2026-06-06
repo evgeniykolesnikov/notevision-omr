@@ -44,6 +44,24 @@ python -m pip install -r requirements.txt
 
 При необходимости скопируйте `.env.example` в `.env` и измените пути.
 
+## Extract PDF pages
+
+Исходные PDF хранятся локально в `data/raw/` и не коммитятся в репозиторий.
+Рекомендуемый вариант: передать папку документа. Скрипт сам найдёт единственный
+PDF внутри неё, поэтому переименовывать файл в `document.pdf` не требуется:
+
+```bash
+python scripts/extract_pages.py --document-dir data/raw/rsl01004470876 --out outputs/pages/rsl01004470876 --dpi 200
+```
+
+Также можно явно передать путь к PDF:
+
+```bash
+python scripts/extract_pages.py --pdf data/raw/rsl01004470876/rsl01004470876.pdf --out outputs/pages/rsl01004470876 --doc-id rsl01004470876 --dpi 200
+```
+
+Изображения будут названы `page_001.png`, `page_002.png` и далее.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
