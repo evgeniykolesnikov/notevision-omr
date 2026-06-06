@@ -1,0 +1,1 @@
+"""Optical music recognition integrations."""

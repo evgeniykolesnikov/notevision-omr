@@ -3,10 +3,23 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
-data/raw/
-data/interim/
-data/processed/
-outputs/
+data/raw/*
+data/interim/*
+data/processed/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+
+outputs/pages/*
+outputs/predictions/*
+outputs/omr/*
+outputs/midi/*
+outputs/reports/*
+!outputs/pages/.gitkeep
+!outputs/predictions/.gitkeep
+!outputs/omr/.gitkeep
+!outputs/midi/.gitkeep
+!outputs/reports/.gitkeep
 
 .env
 .DS_Store
