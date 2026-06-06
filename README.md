@@ -62,6 +62,25 @@ python scripts/extract_pages.py --pdf data/raw/rsl01004470876/rsl01004470876.pdf
 
 Изображения будут названы `page_001.png`, `page_002.png` и далее.
 
+## Parse MRC metadata
+
+MRC-файл хранится локально в папке `data/raw/<doc_id>/` рядом с PDF и не
+коммитится в репозиторий. Чтобы найти единственный MRC в папке документа,
+распарсить метаданные и сохранить JSON, выполните:
+
+```bash
+python scripts/parse_mrc.py --document-dir data/raw/rsl01004470876 --out outputs/reports/rsl01004470876_metadata.json
+```
+
+Для обработки всех папок документов и создания общего CSV:
+
+```bash
+python scripts/parse_mrc_batch.py --raw-dir data/raw --out outputs/reports/all_metadata.csv
+```
+
+Ошибки отдельных документов сохраняются в
+`outputs/reports/mrc_parse_errors.csv` и не останавливают пакетную обработку.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
