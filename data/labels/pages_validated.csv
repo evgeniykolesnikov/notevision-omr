@@ -57,11 +57,11 @@ rsl01001872102,55,music,1,,outputs\pages\rsl01001872102\page_055.png,1,1.0
 rsl01001872102,56,music,1,,outputs\pages\rsl01001872102\page_056.png,1,1.0
 rsl01001872102,57,music,1,,outputs\pages\rsl01001872102\page_057.png,1,1.0
 rsl01001872102,58,music,1,,outputs\pages\rsl01001872102\page_058.png,1,1.0
-rsl01001872102,59,music,1,,outputs\pages\rsl01001872102\page_059.png,1,1.0
-rsl01001872102,60,music,1,,outputs\pages\rsl01001872102\page_060.png,1,1.0
-rsl01001872102,61,music,1,,outputs\pages\rsl01001872102\page_061.png,1,1.0
-rsl01001872102,62,music,1,,outputs\pages\rsl01001872102\page_062.png,1,1.0
-rsl01001872102,63,unknown,0,,outputs\pages\rsl01001872102\page_063.png,0,0.0352
+rsl01001872102,59,blank,0,"empty page, manually corrected after visual check",outputs\pages\rsl01001872102\page_059.png,1,1.0
+rsl01001872102,60,blank,0,"empty page, manually corrected after visual check",outputs\pages\rsl01001872102\page_060.png,1,1.0
+rsl01001872102,61,blank,0,"empty page, manually corrected after visual check",outputs\pages\rsl01001872102\page_061.png,1,1.0
+rsl01001872102,62,blank,0,"empty page, manually corrected after visual check",outputs\pages\rsl01001872102\page_062.png,1,1.0
+rsl01001872102,63,blank,0,"empty page, manually corrected after visual check",outputs\pages\rsl01001872102\page_063.png,0,0.0352
 rsl01001872102,64,unknown,0,,outputs\pages\rsl01001872102\page_064.png,0,0.0
 rsl01001880747,1,title,0,,outputs\pages\rsl01001880747\page_001.png,1,1.0
 rsl01001880747,2,music,1,,outputs\pages\rsl01001880747\page_002.png,1,1.0
