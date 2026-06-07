@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Union
 
 import pandas as pd
-import pymupdf
 
 PathLike = Union[str, Path]
 
@@ -68,6 +67,8 @@ def extract_pdf_pages(
         FileNotFoundError: If ``pdf_path`` does not exist.
         ValueError: If ``pdf_path`` is not a file or ``dpi`` is not positive.
     """
+    import pymupdf
+
     source = Path(pdf_path)
     destination = Path(output_dir)
 
