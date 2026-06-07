@@ -203,6 +203,19 @@ python scripts/run_audiveris_omr.py --labels data/labels/pages_validated.csv --p
 `--audiveris-bin`. Stdout/stderr сохраняются в логах рядом с OMR-результатами,
 а общий отчёт записывается в `outputs/reports/omr_report.csv`.
 
+## Build OMR candidates
+
+Для создания списка валидированных нотных страниц, подходящих для OMR:
+
+```bash
+python scripts/build_omr_candidates.py --labels data/labels/pages_validated.csv --out outputs/reports/omr_candidates.csv
+```
+
+В список попадают только строки с `has_music == 1` и `page_type == "music"`.
+Колонка `preprocessed_path` указывает на ожидаемое бинарное изображение, а
+`exists` показывает, создан ли файл. Доступны фильтр `--doc-id` и ограничение
+`--limit N`.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
