@@ -16,6 +16,7 @@ from notevision.omr.audiveris import (
     REPORT_COLUMNS,
     run_audiveris,
     run_audiveris_batch,
+    run_audiveris_candidates,
 )
 
 REPORT_PATH = PROJECT_ROOT / "outputs" / "reports" / "omr_report.csv"
@@ -24,8 +25,22 @@ REPORT_PATH = PROJECT_ROOT / "outputs" / "reports" / "omr_report.csv"
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, help="One preprocessed page image")
-    parser.add_argument("--labels", type=Path, help="Labels CSV for batch mode")
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument(
+        "--input",
+        type=Path,
+        help="One preprocessed page image",
+    )
+    source_group.add_argument(
+        "--labels",
+        type=Path,
+        help="Labels CSV for batch mode",
+    )
+    source_group.add_argument(
+        "--candidates",
+        type=Path,
+        help="OMR candidates CSV for batch mode",
+    )
     parser.add_argument(
         "--preprocessed-dir",
         type=Path,
@@ -36,10 +51,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit", type=int, help="Batch page limit")
     args = parser.parse_args()
 
-    if args.input is None and args.labels is None:
-        parser.error("one of --input or --labels is required")
-    if args.input is not None and args.labels is not None:
-        parser.error("--input and --labels cannot be used together")
     if args.labels is not None and args.preprocessed_dir is None:
         parser.error("--preprocessed-dir is required with --labels")
     return args
@@ -77,13 +88,25 @@ def main() -> None:
             audiveris_bin=args.audiveris_bin,
         )
         report = _single_report_row(args.input, args.out_dir, result)
-    else:
+    elif args.labels is not None:
         if not args.labels.is_file():
             raise FileNotFoundError(f"Labels file does not exist: {args.labels}")
         labels = pd.read_csv(args.labels)
         report = run_audiveris_batch(
             labels,
             args.preprocessed_dir,
+            args.out_dir,
+            limit=args.limit,
+            audiveris_bin=args.audiveris_bin,
+        )
+    else:
+        if not args.candidates.is_file():
+            raise FileNotFoundError(
+                f"Candidates file does not exist: {args.candidates}"
+            )
+        candidates = pd.read_csv(args.candidates)
+        report = run_audiveris_candidates(
+            candidates,
             args.out_dir,
             limit=args.limit,
             audiveris_bin=args.audiveris_bin,

@@ -216,6 +216,19 @@ python scripts/build_omr_candidates.py --labels data/labels/pages_validated.csv 
 `exists` показывает, создан ли файл. Доступны фильтр `--doc-id` и ограничение
 `--limit N`.
 
+## Run OMR from candidates
+
+Готовый список OMR-кандидатов можно передать напрямую в Audiveris batch:
+
+```bash
+python scripts/run_audiveris_omr.py --candidates outputs/reports/omr_candidates.csv --out-dir outputs/omr --limit 3
+```
+
+Обрабатываются только строки с `exists == True`. Вход берётся из
+`preprocessed_path`, а результаты каждой страницы сохраняются отдельно в
+`outputs/omr/<doc_id>/page_XXX/`. Общий отчёт остаётся в
+`outputs/reports/omr_report.csv`.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные

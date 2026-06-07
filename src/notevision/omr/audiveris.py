@@ -25,6 +25,13 @@ REQUIRED_LABEL_COLUMNS = {
     "has_music",
 }
 
+REQUIRED_CANDIDATE_COLUMNS = {
+    "doc_id",
+    "page_index",
+    "preprocessed_path",
+    "exists",
+}
+
 
 def build_audiveris_command(
     input_path: PathLike,
@@ -176,6 +183,70 @@ def run_audiveris_batch(
             / f"page_{page_index:03d}_binary.png"
         )
         page_output_dir = output_root / str(page.doc_id)
+        result = runner(
+            input_path,
+            page_output_dir,
+            audiveris_bin=audiveris_bin,
+        )
+        rows.append(
+            {
+                "doc_id": page.doc_id,
+                "page_index": page_index,
+                "input_path": str(input_path),
+                "output_dir": str(page_output_dir),
+                "status": result["status"],
+                "message": result["message"],
+            }
+        )
+
+    return pd.DataFrame(rows, columns=REPORT_COLUMNS)
+
+
+def _existing_candidate_mask(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_bool_dtype(series):
+        return series.fillna(False)
+    return series.astype(str).str.strip().str.lower().isin(
+        {"true", "1", "yes"}
+    )
+
+
+def run_audiveris_candidates(
+    candidates_df: pd.DataFrame,
+    out_dir: PathLike,
+    *,
+    limit: int | None = None,
+    audiveris_bin: PathLike = "audiveris",
+    runner: Callable[..., dict[str, object]] = run_audiveris,
+) -> pd.DataFrame:
+    """Run Audiveris for existing pages listed in an OMR candidates CSV."""
+    missing = REQUIRED_CANDIDATE_COLUMNS.difference(candidates_df.columns)
+    if missing:
+        missing_names = ", ".join(sorted(missing))
+        raise ValueError(
+            f"Candidates are missing required columns: {missing_names}"
+        )
+    if limit is not None and limit <= 0:
+        raise ValueError(f"limit must be a positive integer, got: {limit}")
+
+    selected = candidates_df[
+        _existing_candidate_mask(candidates_df["exists"])
+    ].sort_values(
+        ["doc_id", "page_index"],
+        kind="stable",
+    )
+    if limit is not None:
+        selected = selected.head(limit)
+
+    output_root = Path(out_dir)
+    rows: list[dict[str, object]] = []
+    for page in selected.itertuples(index=False):
+        page_index = int(page.page_index)
+        input_path = Path(str(page.preprocessed_path))
+        page_output_dir = (
+            output_root
+            / str(page.doc_id)
+            / f"page_{page_index:03d}"
+        )
         result = runner(
             input_path,
             page_output_dir,
