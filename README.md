@@ -81,6 +81,15 @@ python scripts/parse_mrc_batch.py --raw-dir data/raw --out outputs/reports/all_m
 Ошибки отдельных документов сохраняются в
 `outputs/reports/mrc_parse_errors.csv` и не останавливают пакетную обработку.
 
+## Detect music pages
+
+Baseline-классификатор выделяет горизонтальные линии на изображениях страниц,
+оценивает группы нотных станов и сохраняет rule-based прогнозы в CSV:
+
+```bash
+python scripts/run_pipeline.py --manifest outputs/pages/rsl01004470876/manifest.csv --out outputs/predictions/rsl01004470876_page_predictions.csv
+```
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
