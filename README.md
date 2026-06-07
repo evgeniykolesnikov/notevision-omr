@@ -229,6 +229,20 @@ python scripts/run_audiveris_omr.py --candidates outputs/reports/omr_candidates.
 `outputs/omr/<doc_id>/page_XXX/`. Общий отчёт остаётся в
 `outputs/reports/omr_report.csv`.
 
+## Extract high-resolution OMR pages
+
+Для повторного извлечения только OMR-кандидатов из исходных PDF при 300 DPI:
+
+```bash
+python scripts/extract_omr_pages.py --candidates outputs/reports/omr_candidates.csv --raw-dir data/raw --out-dir outputs/omr_pages --dpi 300
+```
+
+Опция `--limit N` ограничивает число страниц для быстрой проверки. Результаты
+сохраняются в `outputs/omr_pages/<doc_id>/page_XXX.png`, а отчёт — в
+`outputs/reports/omr_pages_report.csv`. Каталог `outputs/pages` не изменяется:
+он остаётся источником страниц основного pipeline, а `outputs/omr_pages`
+используется только для Audiveris/OMR.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
