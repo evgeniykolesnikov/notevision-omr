@@ -90,6 +90,18 @@ Baseline-классификатор выделяет горизонтальны�
 python scripts/run_pipeline.py --manifest outputs/pages/rsl01004470876/manifest.csv --out outputs/predictions/rsl01004470876_page_predictions.csv
 ```
 
+## Evaluate music page detection
+
+Для сравнения прогнозов с ручной разметкой и расчёта accuracy, precision,
+recall, F1 и confusion matrix выполните:
+
+```bash
+python scripts/evaluate.py --labels data/labels/pages.csv --predictions outputs/predictions/rsl01004470876_page_predictions.csv --out outputs/reports/rsl01004470876_metrics.json
+```
+
+Если разметка содержит колонку `page_type`, JSON также включает краткую
+сводку ошибок для каждого типа страниц.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
