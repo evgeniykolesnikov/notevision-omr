@@ -14,6 +14,7 @@ REPORT_COLUMNS = [
     "doc_id",
     "page_index",
     "input_path",
+    "input_kind",
     "output_dir",
     "status",
     "message",
@@ -193,6 +194,7 @@ def run_audiveris_batch(
                 "doc_id": page.doc_id,
                 "page_index": page_index,
                 "input_path": str(input_path),
+                "input_kind": "preprocessed",
                 "output_dir": str(page_output_dir),
                 "status": result["status"],
                 "message": result["message"],
@@ -214,6 +216,7 @@ def run_audiveris_candidates(
     candidates_df: pd.DataFrame,
     out_dir: PathLike,
     *,
+    omr_pages_dir: PathLike | None = None,
     limit: int | None = None,
     audiveris_bin: PathLike = "audiveris",
     runner: Callable[..., dict[str, object]] = run_audiveris,
@@ -228,9 +231,16 @@ def run_audiveris_candidates(
     if limit is not None and limit <= 0:
         raise ValueError(f"limit must be a positive integer, got: {limit}")
 
-    selected = candidates_df[
-        _existing_candidate_mask(candidates_df["exists"])
-    ].sort_values(
+    if omr_pages_dir is None:
+        selected = candidates_df[
+            _existing_candidate_mask(candidates_df["exists"])
+        ]
+        input_kind = "preprocessed"
+    else:
+        selected = candidates_df
+        input_kind = "omr_pages_300dpi"
+
+    selected = selected.sort_values(
         ["doc_id", "page_index"],
         kind="stable",
     )
@@ -241,22 +251,36 @@ def run_audiveris_candidates(
     rows: list[dict[str, object]] = []
     for page in selected.itertuples(index=False):
         page_index = int(page.page_index)
-        input_path = Path(str(page.preprocessed_path))
+        if omr_pages_dir is None:
+            input_path = Path(str(page.preprocessed_path))
+        else:
+            input_path = (
+                Path(omr_pages_dir)
+                / str(page.doc_id)
+                / f"page_{page_index:03d}.png"
+            )
         page_output_dir = (
             output_root
             / str(page.doc_id)
             / f"page_{page_index:03d}"
         )
-        result = runner(
-            input_path,
-            page_output_dir,
-            audiveris_bin=audiveris_bin,
-        )
+        if omr_pages_dir is not None and not input_path.is_file():
+            result = {
+                "status": "failed",
+                "message": f"High-resolution OMR page does not exist: {input_path}",
+            }
+        else:
+            result = runner(
+                input_path,
+                page_output_dir,
+                audiveris_bin=audiveris_bin,
+            )
         rows.append(
             {
                 "doc_id": page.doc_id,
                 "page_index": page_index,
                 "input_path": str(input_path),
+                "input_kind": input_kind,
                 "output_dir": str(page_output_dir),
                 "status": result["status"],
                 "message": result["message"],

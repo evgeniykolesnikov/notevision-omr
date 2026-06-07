@@ -46,6 +46,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Root directory containing preprocessed pages",
     )
+    parser.add_argument(
+        "--omr-pages-dir",
+        type=Path,
+        help="Root directory containing high-resolution OMR pages",
+    )
     parser.add_argument("--out-dir", required=True, type=Path)
     parser.add_argument("--audiveris-bin", default="audiveris")
     parser.add_argument("--limit", type=int, help="Batch page limit")
@@ -69,6 +74,7 @@ def _single_report_row(
                 "doc_id": input_path.parent.name,
                 "page_index": page_index,
                 "input_path": str(input_path),
+                "input_kind": "preprocessed",
                 "output_dir": str(output_dir),
                 "status": result["status"],
                 "message": result["message"],
@@ -108,6 +114,7 @@ def main() -> None:
         report = run_audiveris_candidates(
             candidates,
             args.out_dir,
+            omr_pages_dir=args.omr_pages_dir,
             limit=args.limit,
             audiveris_bin=args.audiveris_bin,
         )

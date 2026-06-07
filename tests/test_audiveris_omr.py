@@ -130,6 +130,61 @@ class AudiverisOmrTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("prepared/skip.png", report["input_path"].tolist())
+        self.assertTrue((report["input_kind"] == "preprocessed").all())
+
+    def test_candidates_high_resolution_mode_uses_omr_pages_and_reports_missing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            omr_pages_dir = root / "outputs" / "omr_pages"
+            existing = omr_pages_dir / "doc-a" / "page_002.png"
+            existing.parent.mkdir(parents=True)
+            existing.write_bytes(b"png")
+            candidates = pd.DataFrame(
+                {
+                    "doc_id": ["doc-a", "doc-b"],
+                    "page_index": [2, 7],
+                    "preprocessed_path": [
+                        "prepared/legacy-a.png",
+                        "prepared/legacy-b.png",
+                    ],
+                    "exists": [False, True],
+                }
+            )
+            calls: list[tuple[Path, Path]] = []
+
+            def fake_runner(
+                input_path: Path,
+                out_dir: Path,
+                audiveris_bin: str = "audiveris",
+            ) -> dict[str, object]:
+                calls.append((Path(input_path), Path(out_dir)))
+                return {"status": "success", "message": ""}
+
+            report = run_audiveris_candidates(
+                candidates,
+                root / "outputs" / "omr",
+                omr_pages_dir=omr_pages_dir,
+                runner=fake_runner,
+            )
+
+            self.assertEqual(len(report), 2)
+            self.assertEqual(calls[0][0], existing)
+            self.assertEqual(
+                calls[0][1],
+                root / "outputs" / "omr" / "doc-a" / "page_002",
+            )
+            self.assertEqual(report.iloc[0]["status"], "success")
+            self.assertEqual(report.iloc[1]["status"], "failed")
+            self.assertIn(
+                "High-resolution OMR page does not exist",
+                report.iloc[1]["message"],
+            )
+            self.assertEqual(len(calls), 1)
+            self.assertTrue(
+                (report["input_kind"] == "omr_pages_300dpi").all()
+            )
 
 
 if __name__ == "__main__":

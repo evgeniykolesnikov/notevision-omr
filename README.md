@@ -218,16 +218,20 @@ python scripts/build_omr_candidates.py --labels data/labels/pages_validated.csv 
 
 ## Run OMR from candidates
 
-Готовый список OMR-кандидатов можно передать напрямую в Audiveris batch:
+Рекомендуемый процесс: сначала повторно извлечь OMR-кандидатов из исходных PDF
+при 300 DPI, затем передать high-resolution страницы в Audiveris:
 
 ```bash
-python scripts/run_audiveris_omr.py --candidates outputs/reports/omr_candidates.csv --out-dir outputs/omr --limit 3
+python scripts/extract_omr_pages.py --candidates outputs/reports/omr_candidates.csv --raw-dir data/raw --out-dir outputs/omr_pages --dpi 300
+python scripts/run_audiveris_omr.py --candidates outputs/reports/omr_candidates.csv --omr-pages-dir outputs/omr_pages --out-dir outputs/omr --limit 10 --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
 ```
 
-Обрабатываются только строки с `exists == True`. Вход берётся из
-`preprocessed_path`, а результаты каждой страницы сохраняются отдельно в
-`outputs/omr/<doc_id>/page_XXX/`. Общий отчёт остаётся в
-`outputs/reports/omr_report.csv`.
+При `--omr-pages-dir` вход строится как
+`outputs/omr_pages/<doc_id>/page_XXX.png`; отсутствующие high-resolution файлы
+получают статус `failed` без запуска Audiveris. Без этого аргумента сохраняется
+старый режим: используются `preprocessed_path` и строки с `exists == True`.
+Результаты каждой страницы сохраняются в `outputs/omr/<doc_id>/page_XXX/`.
+Колонка `input_kind` в `omr_report.csv` показывает использованный источник.
 
 ## Extract high-resolution OMR pages
 
