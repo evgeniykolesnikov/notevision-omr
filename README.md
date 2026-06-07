@@ -119,6 +119,19 @@ python scripts/evaluate.py --labels data/labels/pages.csv --predictions outputs/
 Если разметка содержит колонку `page_type`, JSON также включает краткую
 сводку ошибок для каждого типа страниц.
 
+## Evaluate batch predictions
+
+Для оценки валидированной разметки по всем файлам прогнозов:
+
+```bash
+python scripts/evaluate_batch.py --labels data/labels/pages_validated.csv --predictions-dir outputs/predictions --out outputs/reports/validated_metrics.json
+```
+
+JSON содержит общие метрики, confusion matrix и метрики по каждому `doc_id`.
+При наличии `page_type` также добавляется сводка ошибок по типам страниц.
+Лишние строки прогнозов игнорируются, но для каждой размеченной страницы
+предсказание обязательно.
+
 ## Batch processing
 
 Для обработки всех папок `data/raw/<doc_id>/` одной командой выполните:
