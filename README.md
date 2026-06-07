@@ -158,6 +158,19 @@ python scripts/build_labels_template.py --predictions outputs/reports/all_page_p
 прогноза. Флаг `--sample-only N` оставляет первые N страниц каждого документа
 для быстрой проверки, а `--overwrite` разрешает заменить существующий шаблон.
 
+## Manual label review
+
+Для создания локальной HTML-галереи валидированной разметки:
+
+```bash
+python scripts/build_review_gallery.py --labels data/labels/pages_validated.csv --out outputs/reports/page_review_gallery.html
+```
+
+Галерею можно отфильтровать по документу через `--doc-id`, оставить только
+страницы со score от 0.1 до 0.9 через `--uncertain-only` и ограничить число
+строк через `--limit N`. Изображения подключаются относительными путями, поэтому
+HTML можно открыть локально в браузере.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
