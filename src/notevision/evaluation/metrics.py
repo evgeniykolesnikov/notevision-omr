@@ -6,6 +6,15 @@ import pandas as pd
 
 KEY_COLUMNS = ["doc_id", "page_index"]
 
+LABEL_PREDICTION_COLUMNS = [
+    "has_music_pred",
+    "has_music_score",
+    "black_pixel_ratio",
+    "horizontal_line_count",
+    "horizontal_line_density",
+    "staff_like_line_groups",
+]
+
 
 def _require_columns(
     dataframe: pd.DataFrame,
@@ -71,6 +80,17 @@ def _page_type_error_analysis(merged: pd.DataFrame) -> dict[str, dict[str, Any]]
     return analysis
 
 
+def _format_page_keys(pages: pd.DataFrame, limit: int = 20) -> str:
+    page_keys = [
+        f"{row.doc_id}/page_{int(row.page_index)}"
+        for row in pages.head(limit).itertuples(index=False)
+    ]
+    remaining = len(pages) - len(page_keys)
+    if remaining > 0:
+        page_keys.append(f"... and {remaining} more")
+    return ", ".join(page_keys)
+
+
 def evaluate_binary_predictions(
     labels_df: pd.DataFrame,
     predictions_df: pd.DataFrame,
@@ -92,7 +112,11 @@ def evaluate_binary_predictions(
     _validate_unique_pages(labels_df, "labels_df")
     _validate_unique_pages(predictions_df, "predictions_df")
 
-    merged = labels_df.merge(
+    labels_for_merge = labels_df.drop(
+        columns=LABEL_PREDICTION_COLUMNS,
+        errors="ignore",
+    )
+    merged = labels_for_merge.merge(
         predictions_df[KEY_COLUMNS + ["has_music_pred"]],
         on=KEY_COLUMNS,
         how="left",
@@ -103,10 +127,7 @@ def evaluate_binary_predictions(
     missing_rows = merged["_merge"] == "left_only"
     if missing_rows.any():
         missing_pages = merged.loc[missing_rows, KEY_COLUMNS]
-        page_list = ", ".join(
-            f"{row.doc_id}/page_{int(row.page_index)}"
-            for row in missing_pages.itertuples(index=False)
-        )
+        page_list = _format_page_keys(missing_pages)
         raise ValueError(
             "Predictions are missing pages present in labels: "
             f"{page_list}"
@@ -142,9 +163,31 @@ def evaluate_binary_predictions(
         },
     }
 
-    if "page_type" in labels_df.columns:
+    if "page_type" in labels_for_merge.columns:
         result["error_analysis_by_page_type"] = _page_type_error_analysis(
             merged
         )
 
+    return result
+
+
+def evaluate_batch_predictions(
+    labels_df: pd.DataFrame,
+    predictions_df: pd.DataFrame,
+) -> dict[str, Any]:
+    """Evaluate all labeled pages and include metrics for each document."""
+    result = evaluate_binary_predictions(labels_df, predictions_df)
+    per_document: dict[str, dict[str, Any]] = {}
+
+    for doc_id, document_labels in labels_df.groupby("doc_id", sort=True):
+        document_predictions = predictions_df[
+            predictions_df["doc_id"] == doc_id
+        ]
+        document_metrics = evaluate_binary_predictions(
+            document_labels,
+            document_predictions,
+        )
+        per_document[str(doc_id)] = document_metrics
+
+    result["metrics_by_doc_id"] = per_document
     return result
