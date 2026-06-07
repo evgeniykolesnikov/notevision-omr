@@ -1,16 +1,16 @@
 doc_id,page_index,page_type,has_music,quality_comment,image_path,has_music_pred,has_music_score
 rsl01001872102,1,unknown,0,,outputs\pages\rsl01001872102\page_001.png,0,0.2559
 rsl01001872102,2,unknown,0,,outputs\pages\rsl01001872102\page_002.png,0,0.285
-rsl01001872102,3,music,1,,outputs\pages\rsl01001872102\page_003.png,1,1.0
-rsl01001872102,4,music,1,,outputs\pages\rsl01001872102\page_004.png,1,1.0
-rsl01001872102,5,unknown,0,,outputs\pages\rsl01001872102\page_005.png,0,0.4151
+rsl01001872102,3,blank,0,"empty page, manually corrected after OMR check",outputs\pages\rsl01001872102\page_003.png,0,0.0
+rsl01001872102,4,unknown,1,,outputs\pages\rsl01001872102\page_004.png,0,0.0
+rsl01001872102,5,title,0,,outputs\pages\rsl01001872102\page_005.png,0,0.4151
 rsl01001872102,6,unknown,0,,outputs\pages\rsl01001872102\page_006.png,0,0.0
-rsl01001872102,7,unknown,0,,outputs\pages\rsl01001872102\page_007.png,0,0.0
-rsl01001872102,8,unknown,0,,outputs\pages\rsl01001872102\page_008.png,0,0.0
-rsl01001872102,9,unknown,0,,outputs\pages\rsl01001872102\page_009.png,0,0.0
-rsl01001872102,10,unknown,0,,outputs\pages\rsl01001872102\page_010.png,0,0.0
-rsl01001872102,11,unknown,0,,outputs\pages\rsl01001872102\page_011.png,0,0.0
-rsl01001872102,12,unknown,0,,outputs\pages\rsl01001872102\page_012.png,0,0.0374
+rsl01001872102,7,text,0,,outputs\pages\rsl01001872102\page_007.png,0,0.0
+rsl01001872102,8,text,0,,outputs\pages\rsl01001872102\page_008.png,0,0.0
+rsl01001872102,9,text,0,,outputs\pages\rsl01001872102\page_009.png,0,0.0
+rsl01001872102,10,text,0,,outputs\pages\rsl01001872102\page_010.png,0,0.0
+rsl01001872102,11,text,0,,outputs\pages\rsl01001872102\page_011.png,0,0.0
+rsl01001872102,12,text,0,,outputs\pages\rsl01001872102\page_012.png,0,0.0374
 rsl01001872102,13,music,1,,outputs\pages\rsl01001872102\page_013.png,1,1.0
 rsl01001872102,14,music,1,,outputs\pages\rsl01001872102\page_014.png,1,1.0
 rsl01001872102,15,music,1,,outputs\pages\rsl01001872102\page_015.png,1,1.0
