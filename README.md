@@ -258,6 +258,26 @@ python scripts/summarize_omr_results.py --omr-report outputs/reports/omr_report.
 JSON содержит число успешных и неуспешных страниц, success rate, статистику
 размеров `.mxl`, список успешных страниц с путями к результатам и список ошибок.
 
+## Convert MXL to MIDI
+
+Для преобразования одного результата Audiveris в MIDI:
+
+```bash
+python scripts/convert_mxl_to_midi.py --input outputs/omr_300dpi/rsl01001872102/page_013/page_013.mxl --out outputs/midi/page_013.mid
+```
+
+Пакетная конвертация рекурсивно находит все `.mxl` и сохраняет MIDI по
+документам:
+
+```bash
+python scripts/convert_mxl_to_midi.py --input-dir outputs/omr_300dpi --out-dir outputs/midi --limit 10
+```
+
+При ошибках repeat-разметки конвертер сначала удаляет repeat-barline и
+`RepeatExpression`, а затем при необходимости использует плоский поток
+`notesAndRests`. Режим конвертации и ошибки сохраняются в
+`outputs/reports/midi_conversion_report.csv`.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
