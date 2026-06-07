@@ -119,6 +119,20 @@ python scripts/evaluate.py --labels data/labels/pages.csv --predictions outputs/
 Если разметка содержит колонку `page_type`, JSON также включает краткую
 сводку ошибок для каждого типа страниц.
 
+## Batch processing
+
+Для обработки всех папок `data/raw/<doc_id>/` одной командой выполните:
+
+```bash
+python scripts/batch_run_pipeline.py --raw-dir data/raw --outputs-dir outputs --dpi 200
+```
+
+Batch pipeline извлекает страницы, сохраняет MRC-метаданные при их наличии,
+определяет страницы с нотной записью и формирует общий отчёт
+`outputs/reports/batch_pipeline_report.csv`. Все прогнозы страниц объединяются
+в `outputs/reports/all_page_predictions.csv`. Ошибка одного документа не
+останавливает обработку остальных.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
