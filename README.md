@@ -44,6 +44,23 @@ python -m pip install -r requirements.txt
 
 При необходимости скопируйте `.env.example` в `.env` и измените пути.
 
+## Import downloaded RSL files
+
+Скачанные PDF и MRC можно складывать без переименования в общую папку
+`data/inbox/`. Скрипт сопоставит файлы по идентификатору РГБ, создаст папки
+`data/raw/<doc_id>/`, скопирует туда исходные файлы и добавит `source.txt`:
+
+```bash
+python scripts/organize_raw_files.py --inbox data/inbox --raw-dir data/raw
+```
+
+По умолчанию файлы копируются. Флаг `--move` перемещает их, а `--overwrite`
+разрешает замену уже существующих файлов. Отчёт сохраняется в
+`outputs/reports/raw_import_report.csv`.
+
+После импорта остальные этапы pipeline запускаются для папки
+`data/raw/<doc_id>/`, например через аргумент `--document-dir`.
+
 ## Extract PDF pages
 
 Исходные PDF хранятся локально в `data/raw/` и не коммитятся в репозиторий.
