@@ -247,6 +247,17 @@ python scripts/extract_omr_pages.py --candidates outputs/reports/omr_candidates.
 он остаётся источником страниц основного pipeline, а `outputs/omr_pages`
 используется только для Audiveris/OMR.
 
+## Summarize OMR results
+
+Для сводки статусов Audiveris и созданных `.mxl` файлов:
+
+```bash
+python scripts/summarize_omr_results.py --omr-report outputs/reports/omr_report.csv --omr-dir outputs/omr_300dpi --out outputs/reports/omr_summary.json
+```
+
+JSON содержит число успешных и неуспешных страниц, success rate, статистику
+размеров `.mxl`, список успешных страниц с путями к результатам и список ошибок.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
