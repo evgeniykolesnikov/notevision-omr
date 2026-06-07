@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 
+data/inbox/*
+!data/inbox/.gitkeep
 data/raw/*
 data/interim/*
 data/processed/*
@@ -11,11 +13,13 @@ data/processed/*
 !data/processed/.gitkeep
 
 outputs/pages/*
+outputs/preprocessed/*
 outputs/predictions/*
 outputs/omr/*
 outputs/midi/*
 outputs/reports/*
 !outputs/pages/.gitkeep
+!outputs/preprocessed/.gitkeep
 !outputs/predictions/.gitkeep
 !outputs/omr/.gitkeep
 !outputs/midi/.gitkeep

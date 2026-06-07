@@ -171,6 +171,20 @@ python scripts/build_review_gallery.py --labels data/labels/pages_validated.csv 
 строк через `--limit N`. Изображения подключаются относительными путями, поэтому
 HTML можно открыть локально в браузере.
 
+## Preprocess music pages for OMR
+
+Для нормализации контраста и бинаризации страниц, отмеченных
+`has_music == 1`, выполните:
+
+```bash
+python scripts/preprocess_music_pages.py --labels data/labels/pages_validated.csv --out-dir outputs/preprocessed
+```
+
+Обработанные изображения сохраняются как
+`outputs/preprocessed/<doc_id>/page_XXX_binary.png`, а постраничный отчёт — в
+`outputs/reports/preprocessing_report.csv`. Ошибка одной страницы не
+останавливает обработку остальных.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
