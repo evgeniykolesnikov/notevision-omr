@@ -13,17 +13,25 @@ data/processed/*
 !data/processed/.gitkeep
 
 outputs/pages/*
+outputs/pages_300dpi/*
+outputs/omr_pages/*
 outputs/preprocessed/*
 outputs/predictions/*
 outputs/omr/*
+outputs/omr_300dpi/*
+outputs/omr_debug/*
 outputs/midi/*
 outputs/reports/*
+
 !outputs/pages/.gitkeep
+!outputs/pages_300dpi/.gitkeep
+!outputs/omr_pages/.gitkeep
 !outputs/preprocessed/.gitkeep
 !outputs/predictions/.gitkeep
 !outputs/omr/.gitkeep
+!outputs/omr_300dpi/.gitkeep
+!outputs/omr_debug/.gitkeep
 !outputs/midi/.gitkeep
 !outputs/reports/.gitkeep
-
 .env
 .DS_Store
