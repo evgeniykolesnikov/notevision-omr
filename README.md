@@ -185,6 +185,24 @@ python scripts/preprocess_music_pages.py --labels data/labels/pages_validated.cs
 `outputs/reports/preprocessing_report.csv`. Ошибка одной страницы не
 останавливает обработку остальных.
 
+## Run Audiveris OMR
+
+Экспериментальный запуск Audiveris CLI для одной предобработанной страницы:
+
+```bash
+python scripts/run_audiveris_omr.py --input outputs/preprocessed/rsl01004470876/page_002_binary.png --out-dir outputs/omr/rsl01004470876
+```
+
+Batch-режим обрабатывает только строки с `has_music == 1`:
+
+```bash
+python scripts/run_audiveris_omr.py --labels data/labels/pages_validated.csv --preprocessed-dir outputs/preprocessed --out-dir outputs/omr --limit 3
+```
+
+Если команда Audiveris недоступна в `PATH`, укажите путь через
+`--audiveris-bin`. Stdout/stderr сохраняются в логах рядом с OMR-результатами,
+а общий отчёт записывается в `outputs/reports/omr_report.csv`.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
