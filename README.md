@@ -133,6 +133,18 @@ Batch pipeline извлекает страницы, сохраняет MRC-ме�
 в `outputs/reports/all_page_predictions.csv`. Ошибка одного документа не
 останавливает обработку остальных.
 
+## Build labels template
+
+Для создания CSV-шаблона ручной разметки на основе общего файла прогнозов:
+
+```bash
+python scripts/build_labels_template.py --predictions outputs/reports/all_page_predictions.csv --out data/labels/pages_template.csv
+```
+
+Значения `has_music` и `page_type` предварительно заполняются из baseline-
+прогноза. Флаг `--sample-only N` оставляет первые N страниц каждого документа
+для быстрой проверки, а `--overwrite` разрешает заменить существующий шаблон.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
