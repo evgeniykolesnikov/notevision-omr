@@ -38,4 +38,7 @@ outputs/019ea8da-d9e4-7af0-ae29-9df7a0100da5/
 !outputs/midi/.gitkeep
 !outputs/reports/.gitkeep
 .env
+review_app/*.db
+review_app/*.db-shm
+review_app/*.db-wal
 .DS_Store

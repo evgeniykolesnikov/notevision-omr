@@ -10,3 +10,9 @@ joblib
 streamlit
 pymarc
 music21
+fastapi
+uvicorn
+jinja2
+python-multipart
+pytest
+httpx

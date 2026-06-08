@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Список страниц | NoteVision OMR</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Экспертная проверка OMR</h1>
+      <p>
+        Вы вошли как: <strong>{{ reviewer_name }}</strong>.
+        Сравните скан с аудио и зафиксируйте качество результата.
+      </p>
+    </div>
+    <div class="header-actions">
+      <a class="button" href="/export/expert_review.csv">Экспорт CSV</a>
+      <form method="post" action="/logout">
+        <button>Сменить эксперта</button>
+      </form>
+    </div>
+  </header>
+  <main class="container">
+    <nav class="filters" aria-label="Фильтр статуса">
+      {% for value, label in [
+        ('all', 'Все'),
+        ('not_reviewed', 'Не проверено'),
+        ('draft', 'Черновики'),
+        ('completed', 'Завершено')
+      ] %}
+        <a class="{{ 'active' if selected_status == value else '' }}"
+           href="/?status={{ value }}">{{ label }} ({{ counts[value] }})</a>
+      {% endfor %}
+    </nav>
+    {% if items %}
+      <div class="item-list">
+        {% for item in items %}
+          <article class="item-row">
+            <span class="item-number">#{{ "%02d"|format(item.item_number) }}</span>
+            <div>
+              <strong>{{ item.doc_id }}</strong>
+              <span>страница {{ item.page_index }}</span>
+            </div>
+            <span class="status {{ item.review_status }}">
+              {{ {
+                'not_reviewed': 'Не проверено',
+                'draft': 'Черновик',
+                'completed': 'Завершено'
+              }[item.review_status] }}
+            </span>
+            <a class="button primary" href="/review/{{ item.item_number }}">
+              Проверить
+            </a>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">
+        Нет страниц с выбранным статусом. Если список пуст полностью,
+        сначала выполните импорт пакета.
+      </div>
+    {% endif %}
+  </main>
+</body>
+</html>

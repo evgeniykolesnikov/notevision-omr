@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Проверка #{{ item.item_number }} | NoteVision OMR</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="topbar compact">
+    <div>
+      <h1>Позиция #{{ "%02d"|format(item.item_number) }}</h1>
+      <p>{{ item.doc_id }}, страница {{ item.page_index }}</p>
+    </div>
+    <a class="button" href="/">Назад к списку</a>
+  </header>
+  <main class="review-layout">
+    <section class="media-panel">
+      <h2>Исходный скан</h2>
+      <a href="/media/{{ item.item_number }}/scan" target="_blank">
+        <img class="scan" src="/media/{{ item.item_number }}/scan"
+             alt="Скан страницы {{ item.page_index }}">
+      </a>
+      <h2>Общее аудио</h2>
+      <audio controls preload="metadata"
+             src="/media/{{ item.item_number }}/audio"></audio>
+      {% if item.track_paths %}
+        <h2>Отдельные партии</h2>
+        <div class="tracks">
+          {% for track in item.track_paths %}
+            <label>
+              Дорожка {{ "%02d"|format(loop.index) }}
+              <audio controls preload="none"
+                     src="/media/{{ item.item_number }}/track/{{ loop.index }}"></audio>
+            </label>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="form-panel">
+      <div class="status {{ item.review_status }}">
+        Статус: {{ item.review_status }}
+      </div>
+      <p class="session-info">
+        Вы вошли как: <strong>{{ reviewer_name }}</strong>.
+        Дата завершения будет поставлена автоматически.
+      </p>
+      {% if errors %}
+        <div class="alert error">
+          <strong>Исправьте ошибки:</strong>
+          <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+      <form method="post" action="/review/{{ item.item_number }}">
+        <div class="simple-review">
+          <label>Пригодность
+            <select name="page_usable">
+              <option value="">Не выбрано</option>
+              {% for value, label in [
+                ('yes', 'yes — пригодно'),
+                ('partial', 'partial — нужны правки'),
+                ('no', 'no — непригодно')
+              ] %}
+                <option value="{{ value }}"
+                  {{ 'selected' if values.page_usable == value else '' }}>
+                  {{ label }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Общая оценка
+            <select name="usability_score">
+              <option value="">Не выбрано</option>
+              {% for score in range(1, 6) %}
+                <option value="{{ score }}"
+                  {{ 'selected' if values.usability_score == score else '' }}>
+                  {{ score }}
+                </option>
+              {% endfor %}
+            </select>
+            <small>1 — непригодно, 5 — можно использовать почти без правок.</small>
+          </label>
+        </div>
+
+        <fieldset class="problem-list">
+          <legend>Какие проблемы заметны?</legend>
+          {% for field, label in [
+            ('pitch_problem', 'Ошибки высоты нот'),
+            ('rhythm_problem', 'Ошибки ритма и длительностей'),
+            ('missing_notes_problem', 'Пропущенные ноты'),
+            ('extra_notes_problem', 'Лишние ноты'),
+            ('chord_problem', 'Ошибки аккордов'),
+            ('voice_problem', 'Ошибки голосов или партий'),
+            ('measure_structure_problem', 'Нарушена структура тактов'),
+            ('playback_problem', 'Проблема воспроизведения'),
+            ('unreadable_or_failed', 'Результат не читается или отсутствует')
+          ] %}
+            <label class="checkbox">
+              <input type="checkbox" name="{{ field }}" value="1"
+                     {{ 'checked' if values[field] else '' }}>
+              {{ label }}
+            </label>
+          {% endfor %}
+        </fieldset>
+
+        <div class="form-grid">
+          <label>Основная ошибка
+            <input name="dominant_error" value="{{ values.dominant_error }}">
+          </label>
+        </div>
+        <label>Комментарий эксперта
+          <textarea name="expert_comment" rows="5">{{ values.expert_comment }}</textarea>
+        </label>
+        <label class="checkbox">
+          <input type="checkbox" name="requires_new_omr" value="1"
+                 {{ 'checked' if values.requires_new_omr else '' }}>
+          Требуется повторный OMR
+        </label>
+
+        <details class="advanced-review">
+          <summary>Расширенная количественная оценка</summary>
+          <p>Необязательно. Заполняйте только если считаете ошибки вручную.</p>
+          <div class="form-grid">
+            {% for field, label in [
+              ('checked_measures', 'Проверено тактов'),
+              ('correct_measures', 'Корректных тактов'),
+              ('reference_notes', 'Эталонных нот'),
+              ('matched_notes', 'Сопоставленных нот'),
+              ('pitch_errors', 'Ошибки высоты'),
+              ('duration_errors', 'Ошибки длительности'),
+              ('missing_notes', 'Пропущенные ноты'),
+              ('extra_notes', 'Лишние ноты'),
+              ('voice_errors', 'Ошибки голосов'),
+              ('measure_errors', 'Ошибки тактов')
+            ] %}
+              <label>{{ label }}
+                <input type="number" min="0" name="{{ field }}"
+                       value="{{ values[field] if values[field] else '' }}">
+              </label>
+            {% endfor %}
+          </div>
+        </details>
+
+        <div class="form-actions">
+          <button type="submit" name="action" value="draft">Сохранить черновик</button>
+          <button class="primary" type="submit" name="action" value="complete">
+            Завершить проверку
+          </button>
+        </div>
+      </form>
+      <nav class="review-navigation">
+        {% if previous_number %}
+          <a class="button" href="/review/{{ previous_number }}">← Предыдущая</a>
+        {% else %}<span></span>{% endif %}
+        {% if next_number %}
+          <a class="button" href="/review/{{ next_number }}">Следующая →</a>
+        {% endif %}
+      </nav>
+    </section>
+  </main>
+</body>
+</html>
