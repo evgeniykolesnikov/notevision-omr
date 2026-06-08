@@ -22,6 +22,10 @@ outputs/omr_300dpi/*
 outputs/omr_debug/*
 outputs/midi/*
 outputs/reports/*
+outputs/expert_review_for_send/
+outputs/expert_review_package/*/
+outputs/*.zip
+outputs/019ea8da-d9e4-7af0-ae29-9df7a0100da5/
 
 !outputs/pages/.gitkeep
 !outputs/pages_300dpi/.gitkeep
