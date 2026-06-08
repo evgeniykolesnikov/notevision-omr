@@ -26,6 +26,7 @@ REPORT_COLUMNS = [
     "output_dir",
     "status",
     "message",
+    "run_action",
 ]
 
 REQUIRED_LABEL_COLUMNS = {
@@ -33,6 +34,95 @@ REQUIRED_LABEL_COLUMNS = {
     "page_index",
     "has_music",
 }
+
+
+def find_existing_mxl(
+    output_dir: PathLike,
+    *,
+    input_path: PathLike | None = None,
+    page_index: int | None = None,
+) -> Path | None:
+    """Find an existing MXL export for one page."""
+    destination = Path(output_dir)
+    if not destination.is_dir():
+        return None
+
+    patterns: list[str] = []
+    if page_index is not None:
+        patterns.append(f"page_{page_index:03d}*.mxl")
+    if input_path is not None:
+        input_stem = Path(input_path).stem
+        patterns.append(f"{input_stem}*.mxl")
+        if input_stem.endswith("_binary"):
+            patterns.append(f"{input_stem.removesuffix('_binary')}*.mxl")
+
+    candidates: set[Path] = set()
+    for pattern in patterns:
+        candidates.update(destination.glob(pattern))
+
+    if destination.name.startswith("page_"):
+        candidates.update(destination.glob("*.mxl"))
+
+    files = sorted(
+        (path for path in candidates if path.is_file()),
+        key=lambda path: str(path).lower(),
+    )
+    return files[0] if files else None
+
+
+def _existing_mxl_result(existing_mxl: Path) -> dict[str, object]:
+    return {
+        "status": "success",
+        "message": f"Existing MXL found: {existing_mxl}",
+        "run_action": "skipped",
+    }
+
+
+def _run_page(
+    input_path: Path,
+    output_dir: Path,
+    *,
+    page_index: int,
+    skip_existing: bool,
+    resume: bool,
+    audiveris_bin: PathLike,
+    runner: Callable[..., dict[str, object]],
+) -> dict[str, object]:
+    """Skip an existing export or invoke Audiveris for one page."""
+    if skip_existing or resume:
+        existing_mxl = find_existing_mxl(
+            output_dir,
+            input_path=input_path,
+            page_index=page_index,
+        )
+        if existing_mxl is not None:
+            return _existing_mxl_result(existing_mxl)
+
+    result = runner(
+        input_path,
+        output_dir,
+        audiveris_bin=audiveris_bin,
+    )
+    return {
+        **result,
+        "run_action": "resumed" if resume else "processed",
+    }
+
+
+def summarize_run_actions(report: pd.DataFrame) -> dict[str, int]:
+    """Count skipped, resumed, and invoked pages in an OMR report."""
+    if "run_action" not in report.columns:
+        raise ValueError("OMR report is missing required column: run_action")
+    actions = report["run_action"].astype(str)
+    resumed = int((actions == "resumed").sum())
+    skipped = int((actions == "skipped").sum())
+    processed = int(actions.isin(["processed", "resumed"]).sum())
+    return {
+        "skipped": skipped,
+        "resumed": resumed,
+        "processed": processed,
+    }
+
 
 def build_audiveris_command(
     input_path: PathLike,
@@ -154,6 +244,8 @@ def run_audiveris_batch(
     out_dir: PathLike,
     *,
     limit: int | None = None,
+    skip_existing: bool = False,
+    resume: bool = False,
     audiveris_bin: PathLike = "audiveris",
     runner: Callable[..., dict[str, object]] = run_audiveris,
 ) -> pd.DataFrame:
@@ -184,10 +276,14 @@ def run_audiveris_batch(
             / f"page_{page_index:03d}_binary.png"
         )
         page_output_dir = output_root / str(page.doc_id)
-        result = runner(
+        result = _run_page(
             input_path,
             page_output_dir,
+            page_index=page_index,
+            skip_existing=skip_existing,
+            resume=resume,
             audiveris_bin=audiveris_bin,
+            runner=runner,
         )
         rows.append(
             {
@@ -198,6 +294,7 @@ def run_audiveris_batch(
                 "output_dir": str(page_output_dir),
                 "status": result["status"],
                 "message": result["message"],
+                "run_action": result["run_action"],
             }
         )
 
@@ -210,6 +307,8 @@ def run_audiveris_candidates(
     *,
     omr_pages_dir: PathLike | None = None,
     limit: int | None = None,
+    skip_existing: bool = False,
+    resume: bool = False,
     audiveris_bin: PathLike = "audiveris",
     runner: Callable[..., dict[str, object]] = run_audiveris,
 ) -> pd.DataFrame:
@@ -257,12 +356,17 @@ def run_audiveris_candidates(
             result = {
                 "status": "failed",
                 "message": f"High-resolution OMR page does not exist: {input_path}",
+                "run_action": "not_run",
             }
         else:
-            result = runner(
+            result = _run_page(
                 input_path,
                 page_output_dir,
+                page_index=page_index,
+                skip_existing=skip_existing,
+                resume=resume,
                 audiveris_bin=audiveris_bin,
+                runner=runner,
             )
         rows.append(
             {
@@ -273,6 +377,7 @@ def run_audiveris_candidates(
                 "output_dir": str(page_output_dir),
                 "status": result["status"],
                 "message": result["message"],
+                "run_action": result["run_action"],
             }
         )
 

@@ -12,13 +12,29 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from notevision.omr.audiveris import (
     build_audiveris_command,
+    find_existing_mxl,
     run_audiveris,
     run_audiveris_batch,
     run_audiveris_candidates,
+    summarize_run_actions,
 )
 
 
 class AudiverisOmrTests(unittest.TestCase):
+    def test_find_existing_mxl_matches_page_exports(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            output_dir = Path(temporary_dir)
+            expected = output_dir / "page_002.mvt1.mxl"
+            expected.write_bytes(b"mxl")
+
+            result = find_existing_mxl(
+                output_dir,
+                input_path="page_002.png",
+                page_index=2,
+            )
+
+            self.assertEqual(result, expected)
+
     def test_build_audiveris_command(self) -> None:
         command = build_audiveris_command(
             "page.png",
@@ -255,6 +271,93 @@ class AudiverisOmrTests(unittest.TestCase):
             report["input_kind"].tolist(),
             ["preprocessed", "image_path"],
         )
+
+    def test_skip_existing_does_not_call_runner(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            output_dir = root / "omr"
+            page_output = output_dir / "doc-a" / "page_002"
+            page_output.mkdir(parents=True)
+            (page_output / "page_002.mxl").write_bytes(b"mxl")
+            candidates = pd.DataFrame(
+                {
+                    "doc_id": ["doc-a"],
+                    "page_index": [2],
+                    "image_path": ["pages/page_002.png"],
+                    "has_music": [1],
+                    "page_type": ["music"],
+                }
+            )
+            calls: list[Path] = []
+
+            def fake_runner(
+                input_path: Path,
+                out_dir: Path,
+                audiveris_bin: str = "audiveris",
+            ) -> dict[str, object]:
+                calls.append(Path(input_path))
+                return {"status": "success", "message": ""}
+
+            report = run_audiveris_candidates(
+                candidates,
+                output_dir,
+                skip_existing=True,
+                runner=fake_runner,
+            )
+
+            self.assertEqual(calls, [])
+            self.assertEqual(report.iloc[0]["status"], "success")
+            self.assertEqual(report.iloc[0]["run_action"], "skipped")
+            self.assertIn("Existing MXL found", report.iloc[0]["message"])
+
+    def test_resume_skips_completed_and_runs_unfinished_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            output_dir = root / "omr"
+            completed_dir = output_dir / "doc-a" / "page_001"
+            completed_dir.mkdir(parents=True)
+            (completed_dir / "page_001.mxl").write_bytes(b"mxl")
+            candidates = pd.DataFrame(
+                {
+                    "doc_id": ["doc-a", "doc-a"],
+                    "page_index": [1, 2],
+                    "image_path": [
+                        "pages/page_001.png",
+                        "pages/page_002.png",
+                    ],
+                    "has_music": [1, 1],
+                    "page_type": ["music", "music"],
+                }
+            )
+            calls: list[Path] = []
+
+            def fake_runner(
+                input_path: Path,
+                out_dir: Path,
+                audiveris_bin: str = "audiveris",
+            ) -> dict[str, object]:
+                calls.append(Path(input_path))
+                return {"status": "success", "message": ""}
+
+            report = run_audiveris_candidates(
+                candidates,
+                output_dir,
+                resume=True,
+                runner=fake_runner,
+            )
+
+            self.assertEqual(calls, [Path("pages/page_002.png")])
+            self.assertEqual(
+                report["run_action"].tolist(),
+                ["skipped", "resumed"],
+            )
+            self.assertTrue((report["status"] == "success").all())
+
+            counts = summarize_run_actions(report)
+            self.assertEqual(
+                counts,
+                {"skipped": 1, "resumed": 1, "processed": 1},
+            )
 
 
 if __name__ == "__main__":
