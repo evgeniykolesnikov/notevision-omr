@@ -415,3 +415,27 @@ python scripts/build_document_inventory.py --raw-dir data/raw --out data/labels/
 фиксирует статусы отсутствующих или повреждённых файлов. Исходные PDF/MRC
 остаются локальными; в Git допускается сохранять только inventory, labels, код
 и документацию.
+
+### Manual review workflow
+
+1. Построить статическую редактируемую галерею:
+
+   ```bash
+   python scripts/build_editable_review_gallery.py --labels data/labels/pages_review_priority_thesis.csv --out outputs/reports/thesis_editable_review_gallery.html
+   ```
+
+2. Открыть HTML локально в браузере и исправить метки. Карточки автоматически
+   получают статус `changed`, а текущее состояние сохраняется в
+   `localStorage`.
+3. Экспортировать `thesis_label_corrections.csv` или JSON со всеми изменёнными
+   карточками.
+4. Поместить corrections CSV в `data/labels/` и применить изменения:
+
+   ```bash
+   python scripts/apply_label_corrections.py --labels data/labels/pages_validated_thesis.csv --corrections data/labels/thesis_label_corrections.csv --out data/labels/pages_validated_thesis.csv
+   ```
+
+5. Пересобрать review samples, `document_quality_report.csv` и
+   `detector_error_report.csv`, затем пересчитать метрики detector. Галерея
+   статическая и не отправляет данные на сервер; экспорт выполняется средствами
+   браузера.

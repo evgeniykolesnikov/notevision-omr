@@ -278,6 +278,40 @@ python scripts/convert_mxl_to_midi.py --input-dir outputs/omr_300dpi --out-dir o
 `notesAndRests`. Режим конвертации и ошибки сохраняются в
 `outputs/reports/midi_conversion_report.csv`.
 
+## Manual Review Workflow
+
+1. Построить редактируемую статическую галерею:
+
+   ```bash
+   python scripts/build_editable_review_gallery.py --labels data/labels/pages_review_priority_thesis.csv --out outputs/reports/thesis_editable_review_gallery.html
+   ```
+
+2. Открыть HTML в браузере и разметить страницы. Изменения автоматически
+   отмечаются и сохраняются в `localStorage`.
+3. Экспортировать `thesis_label_corrections.csv`.
+4. Применить corrections к основной thesis-разметке:
+
+   ```bash
+   python scripts/apply_label_corrections.py --labels data/labels/pages_validated_thesis.csv --corrections data/labels/thesis_label_corrections.csv --out data/labels/pages_validated_thesis.csv
+   ```
+
+5. Построить отчёт о составе и качестве документов:
+
+   ```bash
+   python scripts/build_document_quality_report.py --labels data/labels/pages_validated_thesis.csv --out outputs/reports/document_quality_report.csv
+   ```
+
+6. Построить отчёт об ошибках detector:
+
+   ```bash
+   python scripts/build_detector_error_report.py --labels data/labels/pages_validated_thesis.csv --out outputs/reports/detector_error_report.csv
+   ```
+
+7. Пересчитать итоговые метрики после применения ручных исправлений.
+
+Подробные правила типов страниц и комментариев приведены в
+`docs/thesis/labeling_guidelines.md`.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
