@@ -124,6 +124,35 @@ class ExtractOmrPagesTests(unittest.TestCase):
                 str(output_dir / "doc-a" / "page_002.png"),
             )
 
+    def test_accepts_thesis_candidate_format(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            raw_dir = root / "raw"
+            output_dir = root / "omr_pages"
+            document_dir = raw_dir / "doc-a"
+            document_dir.mkdir(parents=True)
+            (document_dir / "doc-a.pdf").touch()
+            candidates = pd.DataFrame(
+                {
+                    "doc_id": ["doc-a", "doc-a"],
+                    "page_index": [2, 3],
+                    "image_path": ["pages/page_002.png", "pages/page_003.png"],
+                    "has_music": [1, 0],
+                    "page_type": ["music", "text"],
+                }
+            )
+            saved_pages: list[int] = []
+
+            report = extract_omr_candidate_pages(
+                candidates,
+                raw_dir,
+                output_dir,
+                pdf_opener=lambda _: FakeDocument(5, saved_pages),
+            )
+
+            self.assertEqual(saved_pages, [2])
+            self.assertEqual(len(report), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

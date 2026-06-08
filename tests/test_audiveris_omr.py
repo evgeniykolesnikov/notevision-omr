@@ -186,6 +186,76 @@ class AudiverisOmrTests(unittest.TestCase):
                 (report["input_kind"] == "omr_pages_300dpi").all()
             )
 
+    def test_thesis_candidates_use_image_path_directly(self) -> None:
+        candidates = pd.DataFrame(
+            {
+                "doc_id": ["doc-a", "doc-a"],
+                "page_index": [2, 3],
+                "image_path": ["pages/page_002.png", "pages/page_003.png"],
+                "has_music": [1, 0],
+                "page_type": ["mixed", "text"],
+            }
+        )
+        calls: list[Path] = []
+
+        def fake_runner(
+            input_path: Path,
+            out_dir: Path,
+            audiveris_bin: str = "audiveris",
+        ) -> dict[str, object]:
+            calls.append(Path(input_path))
+            return {"status": "success", "message": ""}
+
+        report = run_audiveris_candidates(
+            candidates,
+            "outputs/omr",
+            runner=fake_runner,
+        )
+
+        self.assertEqual(calls, [Path("pages/page_002.png")])
+        self.assertEqual(len(report), 1)
+        self.assertEqual(report.iloc[0]["input_kind"], "image_path")
+
+    def test_mixed_candidates_fall_back_to_image_path(self) -> None:
+        candidates = pd.DataFrame(
+            {
+                "doc_id": ["doc-a", "doc-b"],
+                "page_index": [1, 2],
+                "preprocessed_path": ["prepared/page_001.png", ""],
+                "exists": [True, False],
+                "image_path": ["pages/page_001.png", "pages/page_002.png"],
+                "has_music": [1, 1],
+                "page_type": ["music", "music"],
+            }
+        )
+        calls: list[Path] = []
+
+        def fake_runner(
+            input_path: Path,
+            out_dir: Path,
+            audiveris_bin: str = "audiveris",
+        ) -> dict[str, object]:
+            calls.append(Path(input_path))
+            return {"status": "success", "message": ""}
+
+        report = run_audiveris_candidates(
+            candidates,
+            "outputs/omr",
+            runner=fake_runner,
+        )
+
+        self.assertEqual(
+            calls,
+            [
+                Path("prepared/page_001.png"),
+                Path("pages/page_002.png"),
+            ],
+        )
+        self.assertEqual(
+            report["input_kind"].tolist(),
+            ["preprocessed", "image_path"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

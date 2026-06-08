@@ -226,6 +226,18 @@ python scripts/extract_omr_pages.py --candidates outputs/reports/omr_candidates.
 python scripts/run_audiveris_omr.py --candidates outputs/reports/omr_candidates.csv --omr-pages-dir outputs/omr_pages --out-dir outputs/omr --limit 10 --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
 ```
 
+Для thesis workflow промежуточное преобразование CSV не требуется:
+
+```bash
+python scripts/extract_omr_pages.py --candidates data/labels/omr_eval_sample_thesis.csv --raw-dir data/raw --out-dir outputs/omr_pages --dpi 300
+python scripts/run_audiveris_omr.py --candidates data/labels/omr_eval_sample_thesis.csv --omr-pages-dir outputs/omr_pages --out-dir outputs/omr_300dpi --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
+```
+
+Поддерживаются старый формат с `exists` и `preprocessed_path`, новый thesis
+формат с `image_path`, `has_music`, `page_type`, а также смешанные CSV. В
+смешанной строке заполненный `preprocessed_path` сохраняет старое поведение;
+иначе используется `image_path`.
+
 При `--omr-pages-dir` вход строится как
 `outputs/omr_pages/<doc_id>/page_XXX.png`; отсутствующие high-resolution файлы
 получают статус `failed` без запуска Audiveris. Без этого аргумента сохраняется
@@ -239,6 +251,7 @@ python scripts/run_audiveris_omr.py --candidates outputs/reports/omr_candidates.
 
 ```bash
 python scripts/extract_omr_pages.py --candidates outputs/reports/omr_candidates.csv --raw-dir data/raw --out-dir outputs/omr_pages --dpi 300
+python scripts/extract_omr_pages.py --candidates data/labels/omr_eval_sample_thesis.csv --raw-dir data/raw --out-dir outputs/omr_pages --dpi 300
 ```
 
 Опция `--limit N` ограничивает число страниц для быстрой проверки. Результаты

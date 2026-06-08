@@ -8,6 +8,14 @@ from typing import Callable, Union
 
 import pandas as pd
 
+from notevision.omr.candidate_adapter import (
+    NORMALIZED_EXISTS,
+    NORMALIZED_INPUT_KIND,
+    NORMALIZED_INPUT_PATH,
+    NORMALIZED_SELECTED,
+    adapt_omr_candidates,
+)
+
 PathLike = Union[str, Path]
 
 REPORT_COLUMNS = [
@@ -25,14 +33,6 @@ REQUIRED_LABEL_COLUMNS = {
     "page_index",
     "has_music",
 }
-
-REQUIRED_CANDIDATE_COLUMNS = {
-    "doc_id",
-    "page_index",
-    "preprocessed_path",
-    "exists",
-}
-
 
 def build_audiveris_command(
     input_path: PathLike,
@@ -204,14 +204,6 @@ def run_audiveris_batch(
     return pd.DataFrame(rows, columns=REPORT_COLUMNS)
 
 
-def _existing_candidate_mask(series: pd.Series) -> pd.Series:
-    if pd.api.types.is_bool_dtype(series):
-        return series.fillna(False)
-    return series.astype(str).str.strip().str.lower().isin(
-        {"true", "1", "yes"}
-    )
-
-
 def run_audiveris_candidates(
     candidates_df: pd.DataFrame,
     out_dir: PathLike,
@@ -222,23 +214,17 @@ def run_audiveris_candidates(
     runner: Callable[..., dict[str, object]] = run_audiveris,
 ) -> pd.DataFrame:
     """Run Audiveris for existing pages listed in an OMR candidates CSV."""
-    missing = REQUIRED_CANDIDATE_COLUMNS.difference(candidates_df.columns)
-    if missing:
-        missing_names = ", ".join(sorted(missing))
-        raise ValueError(
-            f"Candidates are missing required columns: {missing_names}"
-        )
+    normalized = adapt_omr_candidates(candidates_df)
     if limit is not None and limit <= 0:
         raise ValueError(f"limit must be a positive integer, got: {limit}")
 
     if omr_pages_dir is None:
-        selected = candidates_df[
-            _existing_candidate_mask(candidates_df["exists"])
+        selected = normalized[
+            normalized[NORMALIZED_SELECTED]
+            & normalized[NORMALIZED_EXISTS]
         ]
-        input_kind = "preprocessed"
     else:
-        selected = candidates_df
-        input_kind = "omr_pages_300dpi"
+        selected = normalized[normalized[NORMALIZED_SELECTED]]
 
     selected = selected.sort_values(
         ["doc_id", "page_index"],
@@ -249,19 +235,22 @@ def run_audiveris_candidates(
 
     output_root = Path(out_dir)
     rows: list[dict[str, object]] = []
-    for page in selected.itertuples(index=False):
-        page_index = int(page.page_index)
+    for page in selected.to_dict(orient="records"):
+        page_index = int(page["page_index"])
+        doc_id = str(page["doc_id"])
         if omr_pages_dir is None:
-            input_path = Path(str(page.preprocessed_path))
+            input_path = Path(str(page[NORMALIZED_INPUT_PATH]))
+            input_kind = str(page[NORMALIZED_INPUT_KIND])
         else:
             input_path = (
                 Path(omr_pages_dir)
-                / str(page.doc_id)
+                / doc_id
                 / f"page_{page_index:03d}.png"
             )
+            input_kind = "omr_pages_300dpi"
         page_output_dir = (
             output_root
-            / str(page.doc_id)
+            / doc_id
             / f"page_{page_index:03d}"
         )
         if omr_pages_dir is not None and not input_path.is_file():
@@ -277,7 +266,7 @@ def run_audiveris_candidates(
             )
         rows.append(
             {
-                "doc_id": page.doc_id,
+                "doc_id": doc_id,
                 "page_index": page_index,
                 "input_path": str(input_path),
                 "input_kind": input_kind,

@@ -13,6 +13,10 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from notevision.pdf.extract_pages import find_pdf_in_document_dir
+from notevision.omr.candidate_adapter import (
+    NORMALIZED_SELECTED,
+    adapt_omr_candidates,
+)
 
 REPORT_PATH = PROJECT_ROOT / "outputs" / "reports" / "omr_pages_report.csv"
 
@@ -25,18 +29,6 @@ REPORT_COLUMNS = [
     "status",
     "message",
 ]
-
-REQUIRED_COLUMNS = {
-    "doc_id",
-    "page_index",
-    "page_type",
-    "has_music",
-    "image_path",
-    "preprocessed_path",
-    "quality_comment",
-    "exists",
-}
-
 
 def _default_pdf_opener(pdf_path: Path) -> Any:
     import pymupdf
@@ -54,18 +46,13 @@ def extract_omr_candidate_pages(
     pdf_opener: Callable[[Path], Any] = _default_pdf_opener,
 ) -> pd.DataFrame:
     """Extract only candidate page indexes from each source PDF."""
-    missing = REQUIRED_COLUMNS.difference(candidates.columns)
-    if missing:
-        missing_names = ", ".join(sorted(missing))
-        raise ValueError(
-            f"Candidates are missing required columns: {missing_names}"
-        )
+    normalized = adapt_omr_candidates(candidates)
     if dpi <= 0:
         raise ValueError(f"DPI must be a positive integer, got: {dpi}")
     if limit is not None and limit <= 0:
         raise ValueError(f"limit must be a positive integer, got: {limit}")
 
-    selected = candidates.sort_values(
+    selected = normalized[normalized[NORMALIZED_SELECTED]].sort_values(
         ["doc_id", "page_index"],
         kind="stable",
     )
