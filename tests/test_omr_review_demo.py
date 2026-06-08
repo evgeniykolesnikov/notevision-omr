@@ -49,8 +49,14 @@ class OmrReviewDemoTests(unittest.TestCase):
 
             self.assertIn("doc-a", result)
             self.assertIn("page_002.png", result)
-            self.assertIn("Open MXL", result)
-            self.assertIn("Open MIDI", result)
+            self.assertIn("Открыть скан", result)
+            self.assertIn("Открыть MXL", result)
+            self.assertIn("Открыть MIDI", result)
+            self.assertIn("Пригодность", result)
+            self.assertIn("Высота нот", result)
+            self.assertIn("Длительности / ритм", result)
+            self.assertIn("Общая оценка", result)
+            self.assertIn("Комментарий эксперта", result)
             self.assertIn('data-field="usable"', result)
             self.assertIn('data-field="pitch_quality"', result)
             self.assertIn('data-field="duration_quality"', result)
@@ -76,9 +82,36 @@ class OmrReviewDemoTests(unittest.TestCase):
             )
 
             self.assertIn("doc-missing", result)
-            self.assertIn("PNG file was not found", result)
-            self.assertIn("Open MXL", result)
-            self.assertIn("(missing)", result)
+            self.assertIn("Файл PNG не найден", result)
+            self.assertIn("Открыть MXL", result)
+            self.assertIn("(файл не найден)", result)
+
+    def test_html_contains_russian_instructions_and_rating_criteria(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            result = demo.build_omr_review_demo_html(
+                [
+                    {
+                        "doc_id": "doc-a",
+                        "page_index": "1",
+                        "image_path": "page.png",
+                        "mxl_path": "page.mxl",
+                    }
+                ],
+                root / "demo.html",
+                midi_dir=root / "midi",
+                project_root=root,
+            )
+
+            self.assertIn("Сравните скан страницы с результатом MXL", result)
+            self.assertIn("yes — можно использовать почти без", result)
+            self.assertIn("5 — почти без ошибок", result)
+            self.assertIn("ритм существенно нарушен", result)
+            self.assertIn("5 — пригодно для дальнейшей работы", result)
+            self.assertIn(
+                "Встроенное воспроизведение MIDI будет добавлено позже",
+                result,
+            )
 
 
 if __name__ == "__main__":

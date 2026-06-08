@@ -111,11 +111,11 @@ def build_omr_review_demo_html(
         project_root,
     )
     return f"""<!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NoteVision OMR expert review demo</title>
+  <title>NoteVision OMR — экспертная проверка</title>
   <style>
     :root {{ font-family: Arial, sans-serif; color: #17212b; }}
     body {{ margin: 0; background: #eef2f5; }}
@@ -123,6 +123,15 @@ def build_omr_review_demo_html(
       background: #17212b; color: white; box-shadow: 0 2px 8px #0003; }}
     header h1 {{ margin: 0 0 6px; font-size: 22px; }}
     header p {{ margin: 0; color: #d5dde5; }}
+    .guidance {{ margin: 18px 22px 0; padding: 18px 20px; background: white;
+      border-left: 5px solid #1769aa; border-radius: 8px;
+      box-shadow: 0 2px 8px #1d2a3515; }}
+    .guidance h2 {{ margin: 0 0 10px; }}
+    .guidance h3 {{ margin: 16px 0 6px; font-size: 16px; }}
+    .guidance ul {{ margin: 6px 0; padding-left: 22px; }}
+    .guidance li {{ margin: 5px 0; }}
+    .midi-note {{ margin-top: 14px; padding: 10px 12px; background: #fff5d6;
+      border-radius: 6px; }}
     main {{ display: grid; gap: 20px; padding: 22px; }}
     .review-card {{ display: grid; grid-template-columns: minmax(300px, 46%) 1fr;
       gap: 20px; padding: 18px; background: white; border-radius: 10px;
@@ -142,6 +151,10 @@ def build_omr_review_demo_html(
       border-radius: 6px; text-decoration: none; }}
     .actions a.midi {{ background: #087f5b; }}
     .actions a.missing {{ pointer-events: none; background: #8b969f; }}
+    .scan .scan-link {{ display: inline-block; margin-top: 10px; padding: 8px 11px;
+      color: white; background: #1769aa; border-radius: 6px;
+      text-decoration: none; }}
+    .scan .scan-link.missing {{ pointer-events: none; background: #8b969f; }}
     .form-grid {{ display: grid; grid-template-columns: repeat(2, minmax(150px, 1fr));
       gap: 12px; }}
     label {{ display: grid; gap: 5px; font-weight: bold; }}
@@ -159,9 +172,32 @@ def build_omr_review_demo_html(
 </head>
 <body>
   <header>
-    <h1>NoteVision OMR expert review demo</h1>
-    <p>Pages: {len(prepared)}. Ratings are saved locally in this browser.</p>
+    <h1>NoteVision OMR — экспертная проверка</h1>
+    <p>Страниц: {len(prepared)}. Оценки сохраняются локально в этом браузере.</p>
   </header>
+  <section class="guidance">
+    <h2>Инструкция</h2>
+    <ol>
+      <li>Сравните скан страницы с результатом MXL.</li>
+      <li>При возможности откройте MIDI и прослушайте.</li>
+      <li>Оцените высоты нот, длительности и общую пригодность.</li>
+      <li>Оставьте комментарий, если есть заметные ошибки.</li>
+    </ol>
+    <h3>Критерии оценки</h3>
+    <ul>
+      <li><strong>Пригодность:</strong> yes — можно использовать почти без
+        правок; partial — можно использовать после ручной корректировки;
+        no — результат непригоден.</li>
+      <li><strong>Высота нот:</strong> 5 — почти без ошибок; 3 — есть заметные
+        ошибки, но мелодия узнаваема; 1 — высоты нот в основном неверные.</li>
+      <li><strong>Длительности / ритм:</strong> 5 — ритм в основном совпадает;
+        3 — есть ошибки длительностей; 1 — ритм существенно нарушен.</li>
+      <li><strong>Общая оценка:</strong> 5 — пригодно для дальнейшей работы;
+        3 — частично пригодно; 1 — непригодно.</li>
+    </ul>
+    <p class="midi-note">Встроенное воспроизведение MIDI будет добавлено позже.
+      Сейчас MIDI открывается отдельной ссылкой.</p>
+  </section>
   <main id="reviews"></main>
   <script>
     const pages = {_json_for_script(prepared)};
@@ -197,66 +233,67 @@ def build_omr_review_demo_html(
     function action(uri, exists, label, className = '') {{
       return `<a class="${{className}} ${{exists ? '' : 'missing'}}"
         href="${{escapeHtml(uri)}}" target="_blank">${{escapeHtml(label)}}
-        ${{exists ? '' : ' (missing)'}}</a>`;
+        ${{exists ? '' : ' (файл не найден)'}}</a>`;
     }}
 
     function card(page) {{
       const saved = state[key(page)] || {{}};
       const imageWarning = page.image_exists
         ? ''
-        : '<div class="warning">PNG file was not found. Metadata is still available.</div>';
+        : '<div class="warning">Файл PNG не найден. Карточка и метаданные доступны.</div>';
       return `
         <article class="review-card" data-key="${{escapeHtml(key(page))}}">
           <section class="scan">
             <a href="${{escapeHtml(page.image_uri)}}" target="_blank">
               <img src="${{escapeHtml(page.image_uri)}}"
-                alt="${{escapeHtml(page.doc_id)}} page ${{page.page_index}}"
+                alt="${{escapeHtml(page.doc_id)}} — страница ${{page.page_index}}"
                 loading="lazy">
             </a>
             ${{imageWarning}}
+            ${{action(page.image_uri, page.image_exists, 'Открыть скан', 'scan-link')}}
           </section>
           <section>
-            <h2>${{escapeHtml(page.doc_id)}} / page ${{page.page_index}}</h2>
+            <h2>${{escapeHtml(page.doc_id)}} / страница ${{page.page_index}}</h2>
             <dl>
-              <dt>Document</dt><dd>${{escapeHtml(page.doc_id)}}</dd>
-              <dt>Page</dt><dd>${{page.page_index}}</dd>
-              <dt>Page type</dt><dd>${{escapeHtml(page.page_type)}}</dd>
-              <dt>Selection</dt><dd>${{escapeHtml(page.selection_reason)}}</dd>
-              <dt>Detector score</dt><dd>${{escapeHtml(page.has_music_score)}}</dd>
-              <dt>PNG</dt><dd><code>${{escapeHtml(page.image_path)}}</code></dd>
-              <dt>MXL</dt><dd><code>${{escapeHtml(page.mxl_path)}}</code></dd>
-              <dt>MIDI</dt><dd><code>${{escapeHtml(page.midi_path)}}</code></dd>
+              <dt>Документ</dt><dd>${{escapeHtml(page.doc_id)}}</dd>
+              <dt>Страница</dt><dd>${{page.page_index}}</dd>
+              <dt>Тип страницы</dt><dd>${{escapeHtml(page.page_type)}}</dd>
+              <dt>Причина отбора</dt><dd>${{escapeHtml(page.selection_reason)}}</dd>
+              <dt>Оценка детектора</dt><dd>${{escapeHtml(page.has_music_score)}}</dd>
+              <dt>Путь к PNG</dt><dd><code>${{escapeHtml(page.image_path)}}</code></dd>
+              <dt>Путь к MXL</dt><dd><code>${{escapeHtml(page.mxl_path)}}</code></dd>
+              <dt>Путь к MIDI</dt><dd><code>${{escapeHtml(page.midi_path)}}</code></dd>
             </dl>
             <div class="actions">
-              ${{action(page.mxl_uri, page.mxl_exists, 'Open MXL')}}
-              ${{action(page.midi_uri, page.midi_exists, 'Open MIDI', 'midi')}}
+              ${{action(page.mxl_uri, page.mxl_exists, 'Открыть MXL')}}
+              ${{action(page.midi_uri, page.midi_exists, 'Открыть MIDI', 'midi')}}
             </div>
             <div class="form-grid">
-              <label>Usable
+              <label>Пригодность
                 <select data-field="usable">
                   ${{options(['', 'yes', 'partial', 'no'], saved.usable || '')}}
                 </select>
               </label>
-              <label>Pitch quality (1-5)
+              <label>Высота нот (1–5)
                 <select data-field="pitch_quality">
                   ${{options(['', 1, 2, 3, 4, 5], saved.pitch_quality || '')}}
                 </select>
               </label>
-              <label>Duration quality (1-5)
+              <label>Длительности / ритм (1–5)
                 <select data-field="duration_quality">
                   ${{options(['', 1, 2, 3, 4, 5], saved.duration_quality || '')}}
                 </select>
               </label>
-              <label>Overall quality (1-5)
+              <label>Общая оценка (1–5)
                 <select data-field="overall_quality">
                   ${{options(['', 1, 2, 3, 4, 5], saved.overall_quality || '')}}
                 </select>
               </label>
-              <label class="comment">Expert comments
+              <label class="comment">Комментарий эксперта
                 <textarea data-field="expert_comment">${{escapeHtml(saved.expert_comment || '')}}</textarea>
               </label>
             </div>
-            <div class="saved">Changes are saved locally.</div>
+            <div class="saved">Изменения сохраняются локально.</div>
           </section>
         </article>`;
     }}
