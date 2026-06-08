@@ -1,0 +1,10 @@
+doc_id,page_index,page_type,image_path,failure_reason,audiveris_log_excerpt,image_quality_issue,expert_comment
+rsl01004475471,13,mixed,outputs\pages\rsl01004475471\page_013.png,,,,
+rsl01010549152,6,music,outputs\pages\rsl01010549152\page_006.png,,,,
+rsl01012190186,33,mixed,outputs\pages\rsl01012190186\page_033.png,,,,
+rsl01012190186,53,mixed,outputs\pages\rsl01012190186\page_053.png,,,,
+rsl01013682642,12,music,outputs\pages\rsl01013682642\page_012.png,,,,
+rsl01013682642,13,music,outputs\pages\rsl01013682642\page_013.png,,,,
+rsl01013687437,18,music,outputs\pages\rsl01013687437\page_018.png,,,,
+rsl01013687437,19,music,outputs\pages\rsl01013687437\page_019.png,,,,
+rsl01013687437,21,music,outputs\pages\rsl01013687437\page_021.png,,,,
