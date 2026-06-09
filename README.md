@@ -463,6 +463,41 @@ primary success. Номера страниц автоматически чита
 python -m review_app.import_failures --report outputs/reports/omr_failure_report.csv
 ```
 
+## OMR preprocessing fallback
+
+Если страницы не дали MXL ни при основном OMR 300 DPI, ни при fallback 400 DPI,
+можно отдельно проверить четыре варианта подготовки изображения:
+`crop_page`, `crop_deskew`, `crop_deskew_clahe` и
+`crop_deskew_adaptive_threshold`.
+
+```bat
+python scripts/run_omr_preprocessing_fallback.py ^
+  --failures-report outputs/reports/omr_400dpi_fallback_report.csv ^
+  --pages-dir outputs/pages ^
+  --out-dir outputs/omr_preprocessed_fallback ^
+  --midi-dir outputs/midi_preprocessed_fallback ^
+  --resume ^
+  --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
+```
+
+Скрипт предпочитает уже извлечённое изображение 400 DPI и использует
+`outputs/pages` только как резервный источник. Каждый preprocessing-вариант
+получает отдельные изображение, каталог Audiveris, лог, MXL и MIDI. Основные
+`outputs/omr_300dpi` и `outputs/omr_400dpi_fallback` не изменяются.
+
+Отчёты:
+
+- `outputs/reports/omr_preprocessing_fallback_report.csv`;
+- `outputs/reports/omr_preprocessing_fallback_summary.md`.
+
+Это экспериментальный recovery-этап, а не замена основной OMR-метрики. После
+прогона повторите импорт failure review: UI и CSV покажут общий preprocessing
+status и лучший recovered variant.
+
+```bash
+python -m review_app.import_failures --report outputs/reports/omr_failure_report.csv
+```
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные

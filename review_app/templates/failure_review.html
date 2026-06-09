@@ -41,6 +41,21 @@
       {% else %}
         <p class="session-info">Fallback 400 DPI ещё не запускался или отчёт не импортирован.</p>
       {% endif %}
+      <h2>Preprocessing fallback</h2>
+      {% if failure.preprocessing_fallback_status %}
+        <dl class="fallback-details">
+          <dt>Статус</dt><dd>{{ failure.preprocessing_fallback_status }}</dd>
+          <dt>Лучший вариант</dt>
+          <dd>{{ failure.preprocessing_best_variant or 'не найден' }}</dd>
+          <dt>Runtime</dt>
+          <dd>{{ failure.preprocessing_runtime_seconds or 0 }} секунд</dd>
+          {% if failure.preprocessing_error %}
+            <dt>Ошибки</dt><dd>{{ failure.preprocessing_error }}</dd>
+          {% endif %}
+        </dl>
+      {% else %}
+        <p class="session-info">Preprocessing fallback ещё не запускался или отчёт не импортирован.</p>
+      {% endif %}
     </section>
 
     <section class="form-panel">

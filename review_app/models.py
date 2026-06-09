@@ -41,6 +41,12 @@ FAILURE_EXPORT_FIELDS = (
     "fallback_400_midi_path",
     "fallback_400_runtime_seconds",
     "fallback_400_error",
+    "preprocessing_fallback_status",
+    "preprocessing_best_variant",
+    "preprocessing_mxl_path",
+    "preprocessing_midi_path",
+    "preprocessing_runtime_seconds",
+    "preprocessing_error",
 )
 
 COUNTER_FIELDS = (

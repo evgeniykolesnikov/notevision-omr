@@ -102,6 +102,12 @@ CREATE TABLE IF NOT EXISTS failure_reviews (
     fallback_400_midi_path TEXT NOT NULL DEFAULT '',
     fallback_400_runtime_seconds REAL,
     fallback_400_error TEXT NOT NULL DEFAULT '',
+    preprocessing_fallback_status TEXT NOT NULL DEFAULT '',
+    preprocessing_best_variant TEXT NOT NULL DEFAULT '',
+    preprocessing_mxl_path TEXT NOT NULL DEFAULT '',
+    preprocessing_midi_path TEXT NOT NULL DEFAULT '',
+    preprocessing_runtime_seconds REAL,
+    preprocessing_error TEXT NOT NULL DEFAULT '',
     UNIQUE(doc_id, page_index)
 );
 
@@ -137,6 +143,12 @@ FAILURE_MIGRATION_COLUMNS = {
     "fallback_400_midi_path": "TEXT NOT NULL DEFAULT ''",
     "fallback_400_runtime_seconds": "REAL",
     "fallback_400_error": "TEXT NOT NULL DEFAULT ''",
+    "preprocessing_fallback_status": "TEXT NOT NULL DEFAULT ''",
+    "preprocessing_best_variant": "TEXT NOT NULL DEFAULT ''",
+    "preprocessing_mxl_path": "TEXT NOT NULL DEFAULT ''",
+    "preprocessing_midi_path": "TEXT NOT NULL DEFAULT ''",
+    "preprocessing_runtime_seconds": "REAL",
+    "preprocessing_error": "TEXT NOT NULL DEFAULT ''",
 }
 
 
@@ -606,8 +618,11 @@ def import_failure_items(
                     log_path, failure_status, audiveris_log_excerpt,
                     fallback_400_status, fallback_400_mxl_path,
                     fallback_400_midi_path, fallback_400_runtime_seconds,
-                    fallback_400_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    fallback_400_error, preprocessing_fallback_status,
+                    preprocessing_best_variant, preprocessing_mxl_path,
+                    preprocessing_midi_path, preprocessing_runtime_seconds,
+                    preprocessing_error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(doc_id, page_index) DO UPDATE SET
                     page_type = excluded.page_type,
                     image_path = excluded.image_path,
@@ -639,6 +654,36 @@ def import_failure_items(
                         THEN failure_reviews.fallback_400_error
                         ELSE excluded.fallback_400_error
                     END,
+                    preprocessing_fallback_status = CASE
+                        WHEN excluded.preprocessing_fallback_status = ''
+                        THEN failure_reviews.preprocessing_fallback_status
+                        ELSE excluded.preprocessing_fallback_status
+                    END,
+                    preprocessing_best_variant = CASE
+                        WHEN excluded.preprocessing_fallback_status = ''
+                        THEN failure_reviews.preprocessing_best_variant
+                        ELSE excluded.preprocessing_best_variant
+                    END,
+                    preprocessing_mxl_path = CASE
+                        WHEN excluded.preprocessing_fallback_status = ''
+                        THEN failure_reviews.preprocessing_mxl_path
+                        ELSE excluded.preprocessing_mxl_path
+                    END,
+                    preprocessing_midi_path = CASE
+                        WHEN excluded.preprocessing_fallback_status = ''
+                        THEN failure_reviews.preprocessing_midi_path
+                        ELSE excluded.preprocessing_midi_path
+                    END,
+                    preprocessing_runtime_seconds = CASE
+                        WHEN excluded.preprocessing_fallback_status = ''
+                        THEN failure_reviews.preprocessing_runtime_seconds
+                        ELSE excluded.preprocessing_runtime_seconds
+                    END,
+                    preprocessing_error = CASE
+                        WHEN excluded.preprocessing_fallback_status = ''
+                        THEN failure_reviews.preprocessing_error
+                        ELSE excluded.preprocessing_error
+                    END,
                     audiveris_log_excerpt = CASE
                         WHEN failure_reviews.audiveris_log_excerpt = ''
                         THEN excluded.audiveris_log_excerpt
@@ -659,6 +704,12 @@ def import_failure_items(
                     item.get("fallback_400_midi_path", ""),
                     item.get("fallback_400_runtime_seconds"),
                     item.get("fallback_400_error", ""),
+                    item.get("preprocessing_fallback_status", ""),
+                    item.get("preprocessing_best_variant", ""),
+                    item.get("preprocessing_mxl_path", ""),
+                    item.get("preprocessing_midi_path", ""),
+                    item.get("preprocessing_runtime_seconds"),
+                    item.get("preprocessing_error", ""),
                 ),
             )
             count += 1

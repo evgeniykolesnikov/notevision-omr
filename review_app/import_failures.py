@@ -16,6 +16,12 @@ DEFAULT_OMR_DIR = PROJECT_ROOT / "outputs" / "omr_300dpi"
 DEFAULT_FALLBACK_REPORT = (
     PROJECT_ROOT / "outputs" / "reports" / "omr_400dpi_fallback_report.csv"
 )
+DEFAULT_PREPROCESSING_REPORT = (
+    PROJECT_ROOT
+    / "outputs"
+    / "reports"
+    / "omr_preprocessing_fallback_report.csv"
+)
 
 
 def _page_key(row: dict[str, str]) -> tuple[str, int]:
@@ -120,6 +126,73 @@ def load_fallback_results(
     return results
 
 
+def load_preprocessing_results(
+    preprocessing_report: Path | None,
+) -> dict[tuple[str, int], dict[str, object]]:
+    if preprocessing_report is None or not preprocessing_report.is_file():
+        return {}
+    fields, rows = _read_csv(preprocessing_report)
+    required = {
+        "doc_id",
+        "page_index",
+        "variant",
+        "preprocessing_fallback_status",
+        "preprocessing_mxl_path",
+        "preprocessing_midi_path",
+        "preprocessing_runtime_seconds",
+        "preprocessing_error",
+    }
+    if not required.issubset(fields):
+        raise ValueError(
+            "Preprocessing fallback report is missing required columns: "
+            + ", ".join(sorted(required - set(fields)))
+        )
+    grouped: dict[tuple[str, int], list[dict[str, str]]] = {}
+    for row in rows:
+        grouped.setdefault(_page_key(row), []).append(row)
+    results = {}
+    for key, page_rows in grouped.items():
+        recovered = [
+            row
+            for row in page_rows
+            if row["preprocessing_fallback_status"]
+            in {"recovered_mxl", "recovered_midi"}
+        ]
+        recovered.sort(
+            key=lambda row: (
+                row["preprocessing_fallback_status"] != "recovered_midi",
+                row["variant"],
+            )
+        )
+        best = recovered[0] if recovered else None
+        runtime = sum(
+            float(row["preprocessing_runtime_seconds"] or 0)
+            for row in page_rows
+        )
+        errors = [
+            row["preprocessing_error"].strip()
+            for row in page_rows
+            if row["preprocessing_error"].strip()
+        ]
+        results[key] = {
+            "preprocessing_fallback_status": (
+                best["preprocessing_fallback_status"]
+                if best
+                else "still_failed"
+            ),
+            "preprocessing_best_variant": best["variant"] if best else "",
+            "preprocessing_mxl_path": (
+                best["preprocessing_mxl_path"] if best else ""
+            ),
+            "preprocessing_midi_path": (
+                best["preprocessing_midi_path"] if best else ""
+            ),
+            "preprocessing_runtime_seconds": runtime,
+            "preprocessing_error": " | ".join(dict.fromkeys(errors)),
+        }
+    return results
+
+
 def discover_failure_items(
     report_path: Path,
     *,
@@ -128,6 +201,7 @@ def discover_failure_items(
     pages_dir: Path = DEFAULT_PAGES_DIR,
     omr_dir: Path = DEFAULT_OMR_DIR,
     fallback_report: Path | None = DEFAULT_FALLBACK_REPORT,
+    preprocessing_report: Path | None = DEFAULT_PREPROCESSING_REPORT,
 ) -> list[dict[str, object]]:
     """Build import rows from a page-level OMR failure report."""
     fields, rows = _read_csv(report_path)
@@ -139,6 +213,7 @@ def discover_failure_items(
         )
     page_types = load_page_types(labels_path)
     fallback_results = load_fallback_results(fallback_report)
+    preprocessing_results = load_preprocessing_results(preprocessing_report)
     items = []
     for row in rows:
         if not _is_failure(row):
@@ -174,6 +249,7 @@ def discover_failure_items(
                 "failure_status": status or "missing_mxl",
                 "audiveris_log_excerpt": _read_log_excerpt(log_path),
                 **fallback_results.get((doc_id, page_index), {}),
+                **preprocessing_results.get((doc_id, page_index), {}),
             }
         )
     return items
@@ -200,6 +276,11 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=DEFAULT_FALLBACK_REPORT,
     )
+    parser.add_argument(
+        "--preprocessing-report",
+        type=Path,
+        default=DEFAULT_PREPROCESSING_REPORT,
+    )
     return parser.parse_args()
 
 
@@ -214,6 +295,7 @@ def main() -> None:
             pages_dir=args.pages_dir,
             omr_dir=args.omr_dir,
             fallback_report=args.fallback_report,
+            preprocessing_report=args.preprocessing_report,
         )
     except (FileNotFoundError, ValueError, OSError, csv.Error) as error:
         raise SystemExit(f"Error: {error}") from error

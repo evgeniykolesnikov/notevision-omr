@@ -217,6 +217,12 @@ class FailureReviewCoreTests(unittest.TestCase):
         self.assertIn("fallback_400_midi_path", rows[0])
         self.assertIn("fallback_400_runtime_seconds", rows[0])
         self.assertIn("fallback_400_error", rows[0])
+        self.assertIn("preprocessing_fallback_status", rows[0])
+        self.assertIn("preprocessing_best_variant", rows[0])
+        self.assertIn("preprocessing_mxl_path", rows[0])
+        self.assertIn("preprocessing_midi_path", rows[0])
+        self.assertIn("preprocessing_runtime_seconds", rows[0])
+        self.assertIn("preprocessing_error", rows[0])
         self.assertNotIn("image_path", rows[0])
         self.assertNotIn("log_path", rows[0])
 
@@ -272,6 +278,78 @@ class FailureReviewCoreTests(unittest.TestCase):
         )[0]
         self.assertEqual(exported["fallback_400_status"], "recovered_midi")
         self.assertEqual(exported["fallback_400_runtime_seconds"], "12.5")
+
+    def test_import_aggregates_preprocessing_fallback_fields(self) -> None:
+        preprocessing_report = self.root / "outputs" / "reports" / (
+            "omr_preprocessing_fallback_report.csv"
+        )
+        with preprocessing_report.open(
+            "w", encoding="utf-8", newline=""
+        ) as csv_file:
+            writer = csv.DictWriter(
+                csv_file,
+                fieldnames=(
+                    "doc_id",
+                    "page_index",
+                    "variant",
+                    "preprocessing_fallback_status",
+                    "preprocessing_mxl_path",
+                    "preprocessing_midi_path",
+                    "preprocessing_runtime_seconds",
+                    "preprocessing_error",
+                ),
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "doc_id": "rsl001",
+                    "page_index": 3,
+                    "variant": "crop_page",
+                    "preprocessing_fallback_status": "still_failed",
+                    "preprocessing_mxl_path": "",
+                    "preprocessing_midi_path": "",
+                    "preprocessing_runtime_seconds": "2.0",
+                    "preprocessing_error": "failed",
+                }
+            )
+            writer.writerow(
+                {
+                    "doc_id": "rsl001",
+                    "page_index": 3,
+                    "variant": "crop_deskew_clahe",
+                    "preprocessing_fallback_status": "recovered_midi",
+                    "preprocessing_mxl_path": "result.mxl",
+                    "preprocessing_midi_path": "result.mid",
+                    "preprocessing_runtime_seconds": "3.5",
+                    "preprocessing_error": "",
+                }
+            )
+
+        import_failures(
+            self.report_path,
+            self.db_path,
+            project_root=self.root,
+            labels_path=self.labels_path,
+            pages_dir=self.root / "outputs" / "pages",
+            omr_dir=self.omr_dir,
+            fallback_report=None,
+            preprocessing_report=preprocessing_report,
+        )
+
+        stored = list_failure_reviews(self.db_path)[0]
+        self.assertEqual(
+            stored["preprocessing_fallback_status"], "recovered_midi"
+        )
+        self.assertEqual(
+            stored["preprocessing_best_variant"], "crop_deskew_clahe"
+        )
+        self.assertEqual(stored["preprocessing_runtime_seconds"], 5.5)
+        exported = list(
+            csv.DictReader(io.StringIO(build_failure_export_csv(self.db_path)))
+        )[0]
+        self.assertEqual(
+            exported["preprocessing_best_variant"], "crop_deskew_clahe"
+        )
 
     def test_reviewed_requires_decision(self) -> None:
         _, errors = validate_failure_submission(

@@ -19,8 +19,12 @@ outputs/preprocessed/*
 outputs/predictions/*
 outputs/omr/*
 outputs/omr_300dpi/*
+outputs/omr_400dpi_fallback/*
+outputs/omr_preprocessed_fallback/*
 outputs/omr_debug/*
 outputs/midi/*
+outputs/midi_400dpi_fallback/*
+outputs/midi_preprocessed_fallback/*
 outputs/reports/*
 outputs/expert_review_for_send/
 outputs/expert_review_package/*/
@@ -34,11 +38,16 @@ outputs/019ea8da-d9e4-7af0-ae29-9df7a0100da5/
 !outputs/predictions/.gitkeep
 !outputs/omr/.gitkeep
 !outputs/omr_300dpi/.gitkeep
+!outputs/omr_400dpi_fallback/.gitkeep
+!outputs/omr_preprocessed_fallback/.gitkeep
 !outputs/omr_debug/.gitkeep
 !outputs/midi/.gitkeep
+!outputs/midi_400dpi_fallback/.gitkeep
+!outputs/midi_preprocessed_fallback/.gitkeep
 !outputs/reports/.gitkeep
 .env
 review_app/*.db
+review_app/*.db-journal
 review_app/*.db-shm
 review_app/*.db-wal
 .DS_Store
@@ -46,3 +55,9 @@ review_app/*.db-wal
 outputs/omr_400dpi_fallback/
 outputs/midi_400dpi_fallback/
 outputs/reports/omr_400dpi_fallback_report.csv
+
+# OMR preprocessing fallback generated outputs
+outputs/omr_preprocessed_fallback/
+outputs/midi_preprocessed_fallback/
+outputs/reports/omr_preprocessing_fallback_report.csv
+outputs/reports/omr_preprocessing_fallback_summary.md
