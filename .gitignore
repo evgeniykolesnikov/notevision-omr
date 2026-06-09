@@ -50,6 +50,9 @@ review_app/*.db
 review_app/*.db-journal
 review_app/*.db-shm
 review_app/*.db-wal
+models/*.pt
+models/*.pth
+models/*.joblib
 .DS_Store
 
 outputs/omr_400dpi_fallback/

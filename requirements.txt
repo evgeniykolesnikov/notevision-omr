@@ -16,3 +16,5 @@ jinja2
 python-multipart
 pytest
 httpx
+torch
+torchvision
