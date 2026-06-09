@@ -17,10 +17,10 @@ def classification_metrics(
     labels = sorted(set(truth) | set(predictions), key=str)
     matrix = {
         str(actual): {
-            str(predicted): sum(
+            str(predicted): int(sum(
                 a == actual and p == predicted
                 for a, p in zip(truth, predictions)
-            )
+            ))
             for predicted in labels
         }
         for actual in labels

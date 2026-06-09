@@ -171,6 +171,14 @@ def write_metrics_report(
                 "- Pages from one document never appear in both train and validation.",
                 "- The corpus is limited and may not represent the full library collection.",
                 "- Page-level accuracy does not measure MusicXML musical correctness.",
+                *(
+                    [
+                        "- For multiclass `page_type`, accuracy is inflated by "
+                        "class imbalance; macro-F1 is the primary metric."
+                    ]
+                    if target == "page_type"
+                    else []
+                ),
                 "",
             ]
         ),

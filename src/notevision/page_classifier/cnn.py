@@ -9,7 +9,7 @@ from .classical import classification_metrics
 from .dataset import PageRecord
 
 AUGMENTATION_DESCRIPTION = (
-    "resize/crop; rotation ±3 degrees; brightness/contrast jitter; "
+    "resize/crop; rotation +/-3 degrees; brightness/contrast jitter; "
     "light Gaussian blur; no flips or perspective transforms"
 )
 

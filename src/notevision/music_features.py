@@ -9,7 +9,9 @@ from typing import Any, Callable, Iterable
 FEATURE_COLUMNS = [
     "doc_id",
     "page_index",
+    "source_path",
     "source_file",
+    "midi_path",
     "extraction_status",
     "key_signature",
     "key_fifths",
@@ -21,11 +23,14 @@ FEATURE_COLUMNS = [
     "detected_tonality_latin",
     "detected_tonality_ru",
     "mode_status",
+    "time_signatures",
     "time_signature",
     "clefs",
+    "parts",
     "parts_count",
     "part_names",
     "instruments",
+    "measures_count",
     "confidence",
     "source",
     "error",
@@ -174,13 +179,25 @@ def _clef_name(value: Any) -> str:
     return str(value)
 
 
-def _base_row(path: Path) -> dict[str, object]:
-    doc_id, page_index, path_error = identify_musicxml_page(path)
+def _base_row(
+    path: Path,
+    *,
+    doc_id: str | None = None,
+    page_index: int | str | None = None,
+    midi_path: str = "",
+) -> dict[str, object]:
+    inferred_doc_id, inferred_page_index, path_error = identify_musicxml_page(path)
     return {
-        "doc_id": doc_id,
-        "page_index": page_index,
+        "doc_id": doc_id or inferred_doc_id,
+        "page_index": (
+            str(page_index)
+            if page_index not in (None, "")
+            else inferred_page_index
+        ),
+        "source_path": str(path),
         "source_file": str(path),
-        "extraction_status": "failed",
+        "midi_path": midi_path,
+        "extraction_status": "parse_error",
         "key_signature": "unknown",
         "key_fifths": "unknown",
         "mode": "unknown",
@@ -191,14 +208,21 @@ def _base_row(path: Path) -> dict[str, object]:
         "detected_tonality_latin": "unknown",
         "detected_tonality_ru": "unknown",
         "mode_status": "unknown",
+        "time_signatures": "unknown",
         "time_signature": "unknown",
         "clefs": "unknown",
+        "parts": "unknown",
         "parts_count": 0,
         "part_names": "unknown",
         "instruments": "unknown",
-        "confidence": "low",
+        "measures_count": 0,
+        "confidence": 0.0,
         "source": "not_found",
-        "error": path_error,
+        "error": (
+            path_error
+            if not doc_id and page_index in (None, "")
+            else ""
+        ),
     }
 
 
@@ -206,11 +230,20 @@ def extract_music_features(
     source_file: Path,
     *,
     parser: Callable[[str], Any] | None = None,
+    doc_id: str | None = None,
+    page_index: int | str | None = None,
+    midi_path: str = "",
 ) -> dict[str, object]:
     """Extract explicit MusicXML metadata from one score without guessing."""
     path = Path(source_file)
-    row = _base_row(path)
+    row = _base_row(
+        path,
+        doc_id=doc_id,
+        page_index=page_index,
+        midi_path=midi_path,
+    )
     if not path.is_file():
+        row["extraction_status"] = "missing_file"
         row["error"] = _join_errors(str(row["error"]), f"File not found: {path}")
         return row
 
@@ -250,7 +283,6 @@ def extract_music_features(
                         russian if mode_detected else "unknown"
                     ),
                     "mode_status": "detected" if mode_detected else "unknown",
-                    "confidence": "high",
                     "source": "musicxml",
                 }
             )
@@ -278,35 +310,40 @@ def extract_music_features(
                 or str(getattr(value, "partName", "") or "")
                 for value in found
             )
+        measure_counts = [
+            len(list(part.getElementsByClass("Measure")))
+            for part in parts
+        ]
+        measures_count = max(measure_counts, default=0)
 
         row.update(
             {
+                "time_signatures": ";".join(time_signatures) or "unknown",
                 "time_signature": ";".join(time_signatures) or "unknown",
                 "clefs": ";".join(clefs) or "unknown",
+                "parts": ";".join(part_names) or "unknown",
                 "parts_count": len(source_part_ids) or len(parts),
                 "part_names": ";".join(part_names) or "unknown",
                 "instruments": ";".join(_unique(instrument_names)) or "unknown",
+                "measures_count": measures_count,
             }
         )
-        other_features_found = bool(
-            time_signatures or clefs or part_names or instrument_names or parts
-        )
         key_found = selected_key is not None
-        row["extraction_status"] = (
-            "success" if key_found and other_features_found
-            else "partial" if key_found or other_features_found
-            else "failed"
-        )
+        time_found = bool(time_signatures)
+        if key_found and time_found:
+            row["extraction_status"] = "success"
+            row["confidence"] = 1.0
+        elif not key_found:
+            row["extraction_status"] = "no_key"
+            row["confidence"] = 0.6 if time_found else 0.25
+        else:
+            row["extraction_status"] = "no_time_signature"
+            row["confidence"] = 0.7
         if not key_found:
             row["source"] = "not_found"
-            row["confidence"] = "low"
-        if row["extraction_status"] == "failed":
-            row["error"] = _join_errors(
-                str(row["error"]),
-                "No supported music features found",
-            )
     except Exception as error:
-        row["extraction_status"] = "failed"
+        row["extraction_status"] = "parse_error"
+        row["confidence"] = 0.0
         row["error"] = _join_errors(str(row["error"]), str(error))
     return row
 

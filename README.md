@@ -188,6 +188,12 @@ CNN baseline использует MobileNetV3 Small. Pretrained weights загр
 поворотом, brightness/contrast, лёгким blur и resize/crop. Flip и агрессивная
 perspective transformation не применяются.
 
+Фактические результаты Random Forest, MobileNetV3, multiclass `page_type` и
+inference по 2513 страницам описаны в
+[`docs/thesis/page_classifier_experiments.md`](docs/thesis/page_classifier_experiments.md).
+На текущем validation split rule-based detector сохраняется как основной
+компонент MVP, а расхождения ML-моделей используются для ручного контроля.
+
 ```powershell
 python scripts/train_page_classifier.py `
   --labels data/labels/pages_validated_thesis.csv `
@@ -402,26 +408,41 @@ python scripts/convert_mxl_to_midi.py --input-dir outputs/omr_300dpi --out-dir o
 ## Extract music-theoretical features
 
 Характеристики, явно записанные в MXL/MusicXML, извлекаются через `music21`:
-тональность, размер, ключи, партии и инструменты. Результат используется
-document dashboard и страницей отдельного скана.
+тональность, размер, ключи, партии, инструменты и число тактов. Результат
+используется document dashboard и страницей отдельного скана.
+
+Рекомендуемый запуск по OMR-отчёту:
 
 ```powershell
-python scripts/extract_music_features.py --mxl-dir outputs/omr --out outputs/reports/music_features.csv --summary outputs/reports/music_features_summary.md --recursive
+python scripts/extract_music_features.py --omr-report outputs/reports/omr_pipeline_report.csv --out outputs/reports/music_features.csv
+```
+
+Extractor читает явные пути MXL/MIDI из постраничного отчёта. Для агрегированного
+отчёта по документам он ищет MusicXML в известных primary и fallback-каталогах.
+Отсутствующий или повреждённый файл сохраняется отдельной строкой и не
+останавливает batch.
+
+Также поддерживается рекурсивный обход одного или нескольких каталогов:
+
+```powershell
+python scripts/extract_music_features.py --input-dir outputs/omr --out outputs/reports/music_features.csv --recursive
 ```
 
 Для объединённого прохода по primary и fallback-результатам аргумент можно
 повторять:
 
 ```powershell
-python scripts/extract_music_features.py --mxl-dir outputs/omr_300dpi --mxl-dir outputs/omr_400dpi_fallback --mxl-dir outputs/omr_preprocessed_fallback --out outputs/reports/music_features.csv --summary outputs/reports/music_features_summary.md --recursive
+python scripts/extract_music_features.py --input-dir outputs/omr_300dpi --input-dir outputs/omr_400dpi_fallback --input-dir outputs/omr_preprocessed_fallback --out outputs/reports/music_features.csv --recursive
 ```
 
 - `source=musicxml` означает, что тональность прочитана непосредственно из
   MusicXML;
 - `source=not_found` означает, что значение отсутствует и extractor его не
   выдумывает;
-- `confidence` отражает надёжность извлечения: явная key signature получает
-  `high`, отсутствующая — `low`.
+- `confidence` — числовая оценка полноты извлечённых явных признаков от `0.0`
+  до `1.0`, а не оценка музыкальной корректности OMR;
+- `extraction_status` принимает значения `success`, `no_key`,
+  `no_time_signature`, `parse_error` или `missing_file`.
 
 Если key signature присутствует, но лад в MusicXML не указан, extractor не
 угадывает его по нотам и сохраняет обе допустимые тональности, например
@@ -431,7 +452,7 @@ python scripts/extract_music_features.py --mxl-dir outputs/omr_300dpi --mxl-dir 
 `key_name_latin` и `key_name_ru` сохранены для обратной совместимости.
 
 Битые и пустые файлы не останавливают batch: для них сохраняется
-`extraction_status=failed` и диагностическое поле `error`.
+`extraction_status=parse_error` и диагностическое поле `error`.
 
 ## Manual Review Workflow
 
