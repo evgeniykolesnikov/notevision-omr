@@ -13,6 +13,11 @@ PAGE_TYPES = ("music", "mixed", "title", "text", "blank", "unknown", "bad_scan")
 FEATURE_FIELDS = (
     "key_name_ru",
     "key_name_latin",
+    "key_signature_name_ru",
+    "key_signature_name_latin",
+    "detected_tonality_ru",
+    "detected_tonality_latin",
+    "mode_status",
     "time_signature",
     "clefs",
     "instruments",

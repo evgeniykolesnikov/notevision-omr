@@ -81,9 +81,16 @@ def create_dashboard_fixture(root: Path) -> None:
     reports_dir = root / "outputs" / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
     (reports_dir / "music_features.csv").write_text(
-        "doc_id,page_index,key_name_ru,key_name_latin,time_signature,"
-        "clefs,instruments,confidence,source\n"
-        "rsl01000000001,1,до мажор,C-dur,4/4,скрипичный,Piano,high,musicxml\n",
+        "doc_id,page_index,key_name_ru,key_name_latin,"
+        "key_signature_name_ru,key_signature_name_latin,"
+        "detected_tonality_ru,detected_tonality_latin,mode_status,"
+        "time_signature,clefs,instruments,confidence,source\n"
+        "rsl01000000001,1,до мажор,C-dur,"
+        "до мажор / ля минор,C-dur / a-moll,"
+        "до мажор,C-dur,detected,4/4,скрипичный,Piano,high,musicxml\n"
+        "rsl01000000001,2,ре мажор / си минор,D-dur / b-moll,"
+        "ре мажор / си минор,D-dur / b-moll,"
+        "unknown,unknown,unknown,3/4,скрипичный,Piano,high,musicxml\n",
         encoding="utf-8",
     )
 
@@ -707,6 +714,14 @@ class ReviewAppHttpTests(unittest.TestCase):
         self.assertIn("C-dur", detail.text)
         self.assertIn("скрипичный", detail.text)
         self.assertNotIn(str(self.root), detail.text)
+
+        ambiguous = self.client.get("/documents/rsl01000000001/pages/2")
+        self.assertEqual(ambiguous.status_code, 200)
+        self.assertIn(
+            "Ключевые знаки / возможная тональность",
+            ambiguous.text,
+        )
+        self.assertIn("ре мажор / си минор", ambiguous.text)
 
         audio = self.client.get(
             "/document-media/rsl01000000001/1/audio"

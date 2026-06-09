@@ -81,6 +81,9 @@ class MusicFeaturesTests(unittest.TestCase):
             self.assertEqual(row["extraction_status"], "success")
             self.assertEqual(row["key_name_latin"], "C-dur")
             self.assertEqual(row["key_name_ru"], "до мажор")
+            self.assertEqual(row["detected_tonality_latin"], "C-dur")
+            self.assertEqual(row["detected_tonality_ru"], "до мажор")
+            self.assertEqual(row["mode_status"], "detected")
             self.assertEqual(row["time_signature"], "4/4")
             self.assertEqual(row["source"], "musicxml")
             self.assertEqual(row["confidence"], "high")
@@ -94,6 +97,9 @@ class MusicFeaturesTests(unittest.TestCase):
 
             self.assertEqual(row["key_name_latin"], "a-moll")
             self.assertEqual(row["key_name_ru"], "ля минор")
+            self.assertEqual(row["detected_tonality_latin"], "a-moll")
+            self.assertEqual(row["detected_tonality_ru"], "ля минор")
+            self.assertEqual(row["mode_status"], "detected")
 
     def test_treble_and_bass_clefs_are_translated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -140,6 +146,15 @@ class MusicFeaturesTests(unittest.TestCase):
             self.assertEqual(row["mode"], "unknown")
             self.assertEqual(row["key_name_latin"], "D-dur / b-moll")
             self.assertEqual(row["key_name_ru"], "ре мажор / си минор")
+            self.assertEqual(
+                row["key_signature_name_latin"], "D-dur / b-moll"
+            )
+            self.assertEqual(
+                row["key_signature_name_ru"], "ре мажор / си минор"
+            )
+            self.assertEqual(row["detected_tonality_latin"], "unknown")
+            self.assertEqual(row["detected_tonality_ru"], "unknown")
+            self.assertEqual(row["mode_status"], "unknown")
             self.assertEqual(row["source"], "musicxml")
             self.assertEqual(row["confidence"], "high")
 
@@ -182,7 +197,9 @@ class MusicFeaturesTests(unittest.TestCase):
             self.assertEqual(list(rows[0]), FEATURE_COLUMNS)
             self.assertEqual(rows[0]["doc_id"], "rsl01000000001")
             self.assertEqual(rows[0]["page_index"], "6")
-            self.assertIn("Files processed: 1", summary.read_text(encoding="utf-8"))
+            summary_text = summary.read_text(encoding="utf-8")
+            self.assertIn("Files processed: 1", summary_text)
+            self.assertIn("без mode", summary_text)
 
 
 if __name__ == "__main__":

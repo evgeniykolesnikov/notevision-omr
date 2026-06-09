@@ -51,8 +51,17 @@
           <details class="feature-details">
             <summary>Музыкальные характеристики</summary>
             <dl>
-              <dt>Тональность</dt>
-              <dd>{{ page.music_features.key_name_ru }} / {{ page.music_features.key_name_latin }}</dd>
+              {% if page.music_features.mode_status == 'detected' %}
+                <dt>Тональность</dt>
+                <dd>{{ page.music_features.detected_tonality_ru }} / {{ page.music_features.detected_tonality_latin }}</dd>
+              {% else %}
+                <dt>Ключевые знаки / возможная тональность</dt>
+                <dd>
+                  {{ page.music_features.key_signature_name_ru if page.music_features.key_signature_name_ru != 'unknown' else page.music_features.key_name_ru }}
+                  /
+                  {{ page.music_features.key_signature_name_latin if page.music_features.key_signature_name_latin != 'unknown' else page.music_features.key_name_latin }}
+                </dd>
+              {% endif %}
               <dt>Размер</dt><dd>{{ page.music_features.time_signature }}</dd>
               <dt>Ключи</dt><dd>{{ page.music_features.clefs }}</dd>
               <dt>Инструменты</dt><dd>{{ page.music_features.instruments }}</dd>

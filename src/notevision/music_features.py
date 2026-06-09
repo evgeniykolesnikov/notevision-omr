@@ -16,6 +16,11 @@ FEATURE_COLUMNS = [
     "mode",
     "key_name_latin",
     "key_name_ru",
+    "key_signature_name_latin",
+    "key_signature_name_ru",
+    "detected_tonality_latin",
+    "detected_tonality_ru",
+    "mode_status",
     "time_signature",
     "clefs",
     "parts_count",
@@ -127,6 +132,18 @@ def key_names(fifths: int, mode: str) -> tuple[str, str]:
     return "unknown", "unknown"
 
 
+def key_signature_names(fifths: int) -> tuple[str, str]:
+    """Return the parallel major/minor alternatives implied by a signature."""
+    major = MAJOR_KEYS.get(fifths)
+    minor = MINOR_KEYS.get(fifths)
+    if not major or not minor:
+        return "unknown", "unknown"
+    return (
+        f"{major[0]} / {minor[0]}",
+        f"{major[1]} / {minor[1]}",
+    )
+
+
 def _key_signature_text(fifths: int) -> str:
     if fifths == 0:
         return "0"
@@ -169,6 +186,11 @@ def _base_row(path: Path) -> dict[str, object]:
         "mode": "unknown",
         "key_name_latin": "unknown",
         "key_name_ru": "unknown",
+        "key_signature_name_latin": "unknown",
+        "key_signature_name_ru": "unknown",
+        "detected_tonality_latin": "unknown",
+        "detected_tonality_ru": "unknown",
+        "mode_status": "unknown",
         "time_signature": "unknown",
         "clefs": "unknown",
         "parts_count": 0,
@@ -210,6 +232,8 @@ def extract_music_features(
             fifths = int(selected_key.sharps)
             mode = str(getattr(selected_key, "mode", "") or "unknown").lower()
             latin, russian = key_names(fifths, mode)
+            signature_latin, signature_russian = key_signature_names(fifths)
+            mode_detected = mode in {"major", "minor"}
             row.update(
                 {
                     "key_signature": _key_signature_text(fifths),
@@ -217,6 +241,15 @@ def extract_music_features(
                     "mode": mode,
                     "key_name_latin": latin,
                     "key_name_ru": russian,
+                    "key_signature_name_latin": signature_latin,
+                    "key_signature_name_ru": signature_russian,
+                    "detected_tonality_latin": (
+                        latin if mode_detected else "unknown"
+                    ),
+                    "detected_tonality_ru": (
+                        russian if mode_detected else "unknown"
+                    ),
+                    "mode_status": "detected" if mode_detected else "unknown",
                     "confidence": "high",
                     "source": "musicxml",
                 }

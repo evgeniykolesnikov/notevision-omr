@@ -372,7 +372,10 @@ python scripts/extract_music_features.py --mxl-dir outputs/omr_300dpi --mxl-dir 
 
 Если key signature присутствует, но лад в MusicXML не указан, extractor не
 угадывает его по нотам и сохраняет обе допустимые тональности, например
-`D-dur / b-moll`.
+`D-dur / b-moll`, в полях `key_signature_name_*`. При этом
+`detected_tonality_*=unknown` и `mode_status=unknown`: это интерпретация
+ключевых знаков, а не точно определённая тональность. Старые поля
+`key_name_latin` и `key_name_ru` сохранены для обратной совместимости.
 
 Битые и пустые файлы не останавливают batch: для них сохраняется
 `extraction_status=failed` и диагностическое поле `error`.

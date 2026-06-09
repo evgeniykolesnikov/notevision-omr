@@ -80,6 +80,10 @@ def write_summary(rows: list[dict[str, object]], summary_path: Path) -> None:
                 "directly from MusicXML. `source=not_found` means that the "
                 "extractor did not infer or invent an absent value.",
                 "",
+                "Если MusicXML содержит только key signature без mode, "
+                "система показывает пару параллельных тональностей и не "
+                "делает эвристического вывода о мажоре/миноре.",
+                "",
             ]
         ),
         encoding="utf-8",
