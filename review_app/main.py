@@ -22,16 +22,27 @@ from review_app.auth import (
 )
 from review_app.database import (
     DEFAULT_DB_PATH,
+    adjacent_failure_ids,
     adjacent_item_numbers,
+    get_failure_review,
     get_or_create_reviewer,
     get_item,
     get_reviewer,
     init_db,
+    list_failure_reviews,
     list_items,
+    save_failure_review,
     save_review,
 )
 from review_app.export_csv import build_export_csv
-from review_app.models import REVIEW_STATUSES
+from review_app.export_failures import build_failure_export_csv
+from review_app.failure_schemas import validate_failure_submission
+from review_app.models import (
+    FAILURE_DECISIONS,
+    FAILURE_REASONS,
+    FAILURE_REVIEW_STATUSES,
+    REVIEW_STATUSES,
+)
 from review_app.schemas import resolve_review_metadata, validate_review_submission
 
 APP_DIR = Path(__file__).resolve().parent
@@ -55,7 +66,9 @@ def create_app(
     db_path: Path | None = None,
     package_dir: Path | None = None,
     password: str | None = None,
+    project_root: Path | None = None,
 ) -> FastAPI:
+    selected_project_root = Path(project_root or PROJECT_ROOT).resolve()
     selected_db = Path(
         db_path or os.getenv("REVIEW_APP_DB", str(DEFAULT_DB_PATH))
     ).resolve()
@@ -73,6 +86,7 @@ def create_app(
     app = FastAPI(title="NoteVision OMR Expert Review")
     app.state.db_path = selected_db
     app.state.package_dir = selected_package
+    app.state.project_root = selected_project_root
     app.state.password = selected_password
     templates = Jinja2Templates(directory=APP_DIR / "templates")
     app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
@@ -146,6 +160,36 @@ def create_app(
                 "reviewer_name": current_reviewer(request)["name"],
                 "previous_number": previous_number,
                 "next_number": next_number,
+            },
+            status_code=status_code,
+        )
+
+    def render_failure(
+        request: Request,
+        failure: dict[str, object],
+        *,
+        errors: list[str] | None = None,
+        values: dict[str, object] | None = None,
+        status_code: int = 200,
+    ) -> HTMLResponse:
+        previous_id, next_id = adjacent_failure_ids(
+            app.state.db_path,
+            int(failure["id"]),
+        )
+        reviewer = current_reviewer(request)
+        assert reviewer is not None
+        return templates.TemplateResponse(
+            request=request,
+            name="failure_review.html",
+            context={
+                "failure": failure,
+                "values": values or failure,
+                "errors": errors or [],
+                "reviewer_name": reviewer["name"],
+                "failure_reasons": FAILURE_REASONS,
+                "failure_decisions": FAILURE_DECISIONS,
+                "previous_id": previous_id,
+                "next_id": next_id,
             },
             status_code=status_code,
         )
@@ -311,6 +355,93 @@ def create_app(
         )
         return RedirectResponse(f"/review/{item_number}", status_code=303)
 
+    @app.get("/failures", response_class=HTMLResponse)
+    async def failure_list(
+        request: Request,
+        status: str = "all",
+    ) -> HTMLResponse:
+        if not session_ready(request):
+            return login_redirect(request)
+        selected_status = (
+            status
+            if status in {*FAILURE_REVIEW_STATUSES, "unknown_failure"}
+            else "all"
+        )
+        failures = list_failure_reviews(
+            app.state.db_path,
+            None if selected_status == "all" else selected_status,
+        )
+        all_failures = list_failure_reviews(app.state.db_path)
+        counts = {
+            "all": len(all_failures),
+            "draft": sum(
+                row["review_status"] == "draft" for row in all_failures
+            ),
+            "reviewed": sum(
+                row["review_status"] == "reviewed" for row in all_failures
+            ),
+            "unknown_failure": sum(
+                row["failure_reason"] == "unknown_failure"
+                for row in all_failures
+            ),
+        }
+        reviewer = current_reviewer(request)
+        assert reviewer is not None
+        return templates.TemplateResponse(
+            request=request,
+            name="failures.html",
+            context={
+                "failures": failures,
+                "counts": counts,
+                "selected_status": selected_status,
+                "reviewer_name": reviewer["name"],
+            },
+        )
+
+    @app.get("/failures/{failure_id}", response_class=HTMLResponse)
+    async def failure_page(
+        request: Request,
+        failure_id: int,
+    ) -> HTMLResponse:
+        if not session_ready(request):
+            return login_redirect(request)
+        failure = get_failure_review(app.state.db_path, failure_id)
+        if failure is None:
+            raise HTTPException(status_code=404, detail="Failure not found")
+        return render_failure(request, failure)
+
+    @app.post("/failures/{failure_id}", response_class=HTMLResponse)
+    async def submit_failure(
+        request: Request,
+        failure_id: int,
+    ) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        failure = get_failure_review(app.state.db_path, failure_id)
+        if failure is None:
+            raise HTTPException(status_code=404, detail="Failure not found")
+        reviewer = current_reviewer(request)
+        assert reviewer is not None
+        form = await _read_urlencoded_form(request)
+        reviewed = form.get("action") == "reviewed"
+        values, errors = validate_failure_submission(form, reviewed=reviewed)
+        if errors:
+            return render_failure(
+                request,
+                failure,
+                errors=errors,
+                values={**failure, **values},
+                status_code=422,
+            )
+        save_failure_review(
+            app.state.db_path,
+            failure_id,
+            values,
+            str(reviewer["name"]),
+            "reviewed" if reviewed else "draft",
+        )
+        return RedirectResponse(f"/failures/{failure_id}", status_code=303)
+
     def protected_file(
         request: Request,
         item_number: int,
@@ -326,6 +457,23 @@ def create_app(
             raise HTTPException(status_code=404, detail="Media not found") from error
         if not candidate.is_file():
             raise HTTPException(status_code=404, detail="Media not found")
+        return FileResponse(candidate)
+
+    def protected_project_file(
+        request: Request,
+        relative_path: str,
+        allowed_root: Path,
+    ) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        root = allowed_root.resolve()
+        candidate = (app.state.project_root / relative_path).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError as error:
+            raise HTTPException(status_code=404, detail="File not found") from error
+        if not candidate.is_file():
+            raise HTTPException(status_code=404, detail="File not found")
         return FileResponse(candidate)
 
     @app.get("/media/{item_number}/scan")
@@ -368,6 +516,38 @@ def create_app(
             str(track_paths[track_number - 1]),
         )
 
+    @app.get("/failure-media/{failure_id}/scan")
+    async def failure_scan_media(
+        request: Request,
+        failure_id: int,
+    ) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        failure = get_failure_review(app.state.db_path, failure_id)
+        if failure is None:
+            raise HTTPException(status_code=404, detail="Failure not found")
+        return protected_project_file(
+            request,
+            str(failure["image_path"]),
+            app.state.project_root / "outputs" / "pages",
+        )
+
+    @app.get("/failure-media/{failure_id}/log")
+    async def failure_log_media(
+        request: Request,
+        failure_id: int,
+    ) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        failure = get_failure_review(app.state.db_path, failure_id)
+        if failure is None or not failure["log_path"]:
+            raise HTTPException(status_code=404, detail="Audiveris log not found")
+        return protected_project_file(
+            request,
+            str(failure["log_path"]),
+            app.state.project_root / "outputs" / "omr_300dpi",
+        )
+
     @app.get("/export/expert_review.csv")
     async def export_csv(request: Request) -> Response:
         if not session_ready(request):
@@ -379,6 +559,21 @@ def create_app(
             headers={
                 "Content-Disposition": (
                     'attachment; filename="expert_review.csv"'
+                )
+            },
+        )
+
+    @app.get("/export/failure_review.csv")
+    async def export_failure_csv(request: Request) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        content = "\ufeff" + build_failure_export_csv(app.state.db_path)
+        return Response(
+            content=content,
+            media_type="text/csv; charset=utf-8",
+            headers={
+                "Content-Disposition": (
+                    'attachment; filename="failure_review.csv"'
                 )
             },
         )

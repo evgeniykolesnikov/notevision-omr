@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Разбор OMR failures | NoteVision OMR</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Разбор сбоев OMR</h1>
+      <p>Вы вошли как: <strong>{{ reviewer_name }}</strong>.</p>
+    </div>
+    <div class="header-actions">
+      <a class="button" href="/">Экспертная проверка OMR</a>
+      <a class="button" href="/export/failure_review.csv">Экспорт CSV</a>
+      <form method="post" action="/logout">
+        <button>Сменить эксперта</button>
+      </form>
+    </div>
+  </header>
+  <main class="container">
+    <nav class="filters" aria-label="Фильтр failure review">
+      {% for value, label in [
+        ('all', 'Все'),
+        ('draft', 'Черновики'),
+        ('reviewed', 'Разобрано'),
+        ('unknown_failure', 'Причина неизвестна')
+      ] %}
+        <a class="{{ 'active' if selected_status == value else '' }}"
+           href="/failures?status={{ value }}">{{ label }} ({{ counts[value] }})</a>
+      {% endfor %}
+    </nav>
+    {% if failures %}
+      <div class="item-list">
+        {% for failure in failures %}
+          <article class="item-row failure-row">
+            <span class="item-number">#{{ failure.id }}</span>
+            <div>
+              <strong>{{ failure.doc_id }}</strong>
+              <span>страница {{ failure.page_index }}</span>
+            </div>
+            <div>
+              <strong>{{ failure.failure_status }}</strong>
+              <span>{{ failure.failure_reason }}</span>
+            </div>
+            <span class="status {{ failure.review_status }}">
+              {{ 'Разобрано' if failure.review_status == 'reviewed' else 'Черновик' }}
+            </span>
+            <a class="button primary" href="/failures/{{ failure.id }}">
+              Разобрать
+            </a>
+          </article>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">Нет failures с выбранным фильтром.</div>
+    {% endif %}
+  </main>
+</body>
+</html>

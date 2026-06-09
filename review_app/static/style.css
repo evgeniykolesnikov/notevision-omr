@@ -96,6 +96,7 @@ audio { width: 100%; }
 .status.not_reviewed { background: #eceae4; }
 .status.draft { background: #fff1c9; color: #72520c; }
 .status.completed { background: #d8eee5; color: #285a49; }
+.status.reviewed { background: #d8eee5; color: #285a49; }
 .empty-state, .alert {
   border-radius: 9px;
   padding: 1rem;
@@ -126,6 +127,25 @@ audio { width: 100%; }
   background: #e8e6df;
 }
 .tracks { display: grid; gap: .8rem; }
+.failure-row { grid-template-columns: 4rem 1fr 1fr auto auto; }
+.log-excerpt {
+  max-height: 42vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: .8rem;
+  background: #171916;
+  color: #e8eee9;
+  font: 13px/1.4 ui-monospace, "Cascadia Mono", monospace;
+}
+.fallback-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: .35rem .8rem;
+}
+.fallback-details dt { font-weight: 700; }
+.fallback-details dd { margin: 0; overflow-wrap: anywhere; }
 .tracks label { color: var(--muted); }
 .form-grid {
   display: grid;
@@ -191,6 +211,7 @@ audio { width: 100%; }
 @media (max-width: 900px) {
   .review-layout { grid-template-columns: 1fr; }
   .item-row { grid-template-columns: 3rem 1fr; }
+  .failure-row { grid-template-columns: 3rem 1fr; }
   .item-row .status, .item-row .button { justify-self: start; }
 }
 @media (max-width: 560px) {

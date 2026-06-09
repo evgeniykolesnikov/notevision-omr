@@ -401,6 +401,68 @@ python scripts/calculate_expert_review_metrics.py --input path/to/expert_review.
 как отдельный контекст и не смешивается с экспертной оценкой музыкального
 содержания.
 
+## OMR failure review
+
+Постраничный отчёт `outputs/reports/omr_failure_report.csv` можно импортировать
+в тот же защищённый web-интерфейс:
+
+```bash
+python -m review_app.import_failures --report outputs/reports/omr_failure_report.csv
+```
+
+Импорт сопоставляет failure с
+`outputs/pages/<doc_id>/page_XXX.png`, ищет лог в
+`outputs/omr_300dpi/<doc_id>/page_XXX/` и при наличии thesis labels добавляет
+`page_type`. Агрегированный `omr_pipeline_report.csv` сам по себе не содержит
+номеров failed-страниц, поэтому для импорта нужен постраничный failure report.
+
+После запуска приложения откройте `http://127.0.0.1:8000/failures`. Раздел
+доступен только после входа и позволяет классифицировать причину сбоя, выбрать
+решение, сохранить черновик или отметить страницу как разобранную.
+
+Результат выгружается через `/export/failure_review.csv`. CSV совместим с
+`data/labels/omr_failure_expert_review_thesis.csv` и может использоваться в ВКР
+для таблицы причин OMR-сбоев, решений по повторному запуску и анализа связи
+ошибок с качеством или типом страницы.
+
+## OMR fallback at 400 DPI
+
+400 DPI используется только как fallback-эксперимент для страниц, на которых
+основной OMR при 300 DPI не создал MXL. Результаты сохраняются отдельно и не
+перезаписывают `outputs/omr_300dpi` или основную метрику `141/150`.
+
+```bat
+python scripts/run_omr_fallback_dpi.py ^
+  --omr-report outputs/reports/omr_pipeline_report.csv ^
+  --pages-dir outputs/pages ^
+  --out-dir outputs/omr_400dpi_fallback ^
+  --midi-dir outputs/midi_400dpi_fallback ^
+  --dpi 400 ^
+  --resume ^
+  --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
+```
+
+Агрегированный pipeline report используется для исходного размера выборки и
+primary success. Номера страниц автоматически читаются из соседнего
+`outputs/reports/omr_failure_report.csv`. Для честного 400 DPI исходная страница
+переизвлекается из PDF в `data/raw`; масштабирование старого PNG не выполняется.
+
+Результаты:
+
+- `outputs/reports/omr_400dpi_fallback_report.csv`;
+- `outputs/reports/omr_400dpi_fallback_summary.md`;
+- MXL и логи в `outputs/omr_400dpi_fallback`;
+- MIDI в `outputs/midi_400dpi_fallback`.
+
+`fallback_recovery_rate` показывает долю fallback-попыток, восстановивших MXL.
+`combined_success_rate` считается отдельно как доля исходной OMR-выборки,
+успешной по полному пути MXL+MIDI после primary 300 DPI и fallback 400 DPI.
+После эксперимента повторите импорт failures, чтобы статус появился в UI:
+
+```bash
+python -m review_app.import_failures --report outputs/reports/omr_failure_report.csv
+```
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные

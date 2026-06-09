@@ -42,3 +42,7 @@ review_app/*.db
 review_app/*.db-shm
 review_app/*.db-wal
 .DS_Store
+
+outputs/omr_400dpi_fallback/
+outputs/midi_400dpi_fallback/
+outputs/reports/omr_400dpi_fallback_report.csv

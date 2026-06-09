@@ -78,6 +78,35 @@ CREATE TABLE IF NOT EXISTS reviews (
 
 CREATE INDEX IF NOT EXISTS idx_reviews_reviewer
     ON reviews(reviewer_id, review_status);
+
+CREATE TABLE IF NOT EXISTS failure_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    doc_id TEXT NOT NULL,
+    page_index INTEGER NOT NULL,
+    page_type TEXT NOT NULL DEFAULT '',
+    image_path TEXT NOT NULL,
+    omr_dir TEXT NOT NULL,
+    log_path TEXT NOT NULL DEFAULT '',
+    failure_status TEXT NOT NULL DEFAULT 'missing_mxl',
+    failure_reason TEXT NOT NULL DEFAULT 'unknown_failure',
+    image_quality_issue TEXT NOT NULL DEFAULT '',
+    decision TEXT NOT NULL DEFAULT '',
+    audiveris_log_excerpt TEXT NOT NULL DEFAULT '',
+    expert_comment TEXT NOT NULL DEFAULT '',
+    reviewer TEXT NOT NULL DEFAULT '',
+    review_status TEXT NOT NULL DEFAULT 'draft'
+        CHECK(review_status IN ('draft', 'reviewed')),
+    updated_at TEXT,
+    fallback_400_status TEXT NOT NULL DEFAULT '',
+    fallback_400_mxl_path TEXT NOT NULL DEFAULT '',
+    fallback_400_midi_path TEXT NOT NULL DEFAULT '',
+    fallback_400_runtime_seconds REAL,
+    fallback_400_error TEXT NOT NULL DEFAULT '',
+    UNIQUE(doc_id, page_index)
+);
+
+CREATE INDEX IF NOT EXISTS idx_failure_reviews_status
+    ON failure_reviews(review_status, failure_reason);
 """
 
 LEGACY_MIGRATION_COLUMNS = {
@@ -100,6 +129,14 @@ REVIEWER_MIGRATION_COLUMNS = {
 
 ITEM_MIGRATION_COLUMNS = {
     "review_set": "TEXT NOT NULL DEFAULT 'default'",
+}
+
+FAILURE_MIGRATION_COLUMNS = {
+    "fallback_400_status": "TEXT NOT NULL DEFAULT ''",
+    "fallback_400_mxl_path": "TEXT NOT NULL DEFAULT ''",
+    "fallback_400_midi_path": "TEXT NOT NULL DEFAULT ''",
+    "fallback_400_runtime_seconds": "REAL",
+    "fallback_400_error": "TEXT NOT NULL DEFAULT ''",
 }
 
 
@@ -253,6 +290,17 @@ def init_db(db_path: Path) -> None:
             if column not in reviewer_columns:
                 connection.execute(
                     f"ALTER TABLE reviewers ADD COLUMN {column} {definition}"
+                )
+        failure_columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(failure_reviews)"
+            ).fetchall()
+        }
+        for column, definition in FAILURE_MIGRATION_COLUMNS.items():
+            if column not in failure_columns:
+                connection.execute(
+                    f"ALTER TABLE failure_reviews ADD COLUMN {column} {definition}"
                 )
         _migrate_reviewers(connection)
         _migrate_legacy_reviews(connection)
@@ -539,4 +587,175 @@ def adjacent_item_numbers(
     return (
         previous_row["item_number"] if previous_row else None,
         next_row["item_number"] if next_row else None,
+    )
+
+
+def import_failure_items(
+    db_path: Path,
+    items: Iterable[dict[str, object]],
+) -> int:
+    """Upsert failed OMR pages without overwriting existing manual reviews."""
+    init_db(db_path)
+    count = 0
+    with closing(connect(db_path)) as connection:
+        for item in items:
+            connection.execute(
+                """
+                INSERT INTO failure_reviews (
+                    doc_id, page_index, page_type, image_path, omr_dir,
+                    log_path, failure_status, audiveris_log_excerpt,
+                    fallback_400_status, fallback_400_mxl_path,
+                    fallback_400_midi_path, fallback_400_runtime_seconds,
+                    fallback_400_error
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(doc_id, page_index) DO UPDATE SET
+                    page_type = excluded.page_type,
+                    image_path = excluded.image_path,
+                    omr_dir = excluded.omr_dir,
+                    log_path = excluded.log_path,
+                    failure_status = excluded.failure_status,
+                    fallback_400_status = CASE
+                        WHEN excluded.fallback_400_status = ''
+                        THEN failure_reviews.fallback_400_status
+                        ELSE excluded.fallback_400_status
+                    END,
+                    fallback_400_mxl_path = CASE
+                        WHEN excluded.fallback_400_status = ''
+                        THEN failure_reviews.fallback_400_mxl_path
+                        ELSE excluded.fallback_400_mxl_path
+                    END,
+                    fallback_400_midi_path = CASE
+                        WHEN excluded.fallback_400_status = ''
+                        THEN failure_reviews.fallback_400_midi_path
+                        ELSE excluded.fallback_400_midi_path
+                    END,
+                    fallback_400_runtime_seconds = CASE
+                        WHEN excluded.fallback_400_status = ''
+                        THEN failure_reviews.fallback_400_runtime_seconds
+                        ELSE excluded.fallback_400_runtime_seconds
+                    END,
+                    fallback_400_error = CASE
+                        WHEN excluded.fallback_400_status = ''
+                        THEN failure_reviews.fallback_400_error
+                        ELSE excluded.fallback_400_error
+                    END,
+                    audiveris_log_excerpt = CASE
+                        WHEN failure_reviews.audiveris_log_excerpt = ''
+                        THEN excluded.audiveris_log_excerpt
+                        ELSE failure_reviews.audiveris_log_excerpt
+                    END
+                """,
+                (
+                    item["doc_id"],
+                    item["page_index"],
+                    item.get("page_type", ""),
+                    item["image_path"],
+                    item["omr_dir"],
+                    item.get("log_path", ""),
+                    item.get("failure_status", "missing_mxl"),
+                    item.get("audiveris_log_excerpt", ""),
+                    item.get("fallback_400_status", ""),
+                    item.get("fallback_400_mxl_path", ""),
+                    item.get("fallback_400_midi_path", ""),
+                    item.get("fallback_400_runtime_seconds"),
+                    item.get("fallback_400_error", ""),
+                ),
+            )
+            count += 1
+        connection.commit()
+    return count
+
+
+def list_failure_reviews(
+    db_path: Path,
+    status: str | None = None,
+) -> list[dict[str, object]]:
+    """List failed pages, optionally filtering by review state."""
+    init_db(db_path)
+    query = "SELECT * FROM failure_reviews"
+    parameters: list[object] = []
+    if status == "unknown_failure":
+        query += " WHERE failure_reason = 'unknown_failure'"
+    elif status in {"draft", "reviewed"}:
+        query += " WHERE review_status = ?"
+        parameters.append(status)
+    query += " ORDER BY doc_id, page_index"
+    with closing(connect(db_path)) as connection:
+        rows = connection.execute(query, parameters).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_failure_review(
+    db_path: Path,
+    failure_id: int,
+) -> dict[str, object] | None:
+    init_db(db_path)
+    with closing(connect(db_path)) as connection:
+        row = connection.execute(
+            "SELECT * FROM failure_reviews WHERE id = ?",
+            (failure_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def save_failure_review(
+    db_path: Path,
+    failure_id: int,
+    values: dict[str, object],
+    reviewer: str,
+    status: str,
+) -> None:
+    """Update one failure classification."""
+    init_db(db_path)
+    if status not in {"draft", "reviewed"}:
+        raise ValueError(f"Unsupported failure review status: {status}")
+    with closing(connect(db_path)) as connection:
+        cursor = connection.execute(
+            """
+            UPDATE failure_reviews
+            SET failure_reason = ?,
+                image_quality_issue = ?,
+                decision = ?,
+                audiveris_log_excerpt = ?,
+                expert_comment = ?,
+                reviewer = ?,
+                review_status = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                values["failure_reason"],
+                values["image_quality_issue"],
+                values["decision"],
+                values["audiveris_log_excerpt"],
+                values["expert_comment"],
+                reviewer,
+                status,
+                failure_id,
+            ),
+        )
+        if cursor.rowcount == 0:
+            raise KeyError(f"Unknown failure review: {failure_id}")
+        connection.commit()
+
+
+def adjacent_failure_ids(
+    db_path: Path,
+    failure_id: int,
+) -> tuple[int | None, int | None]:
+    with closing(connect(db_path)) as connection:
+        current = connection.execute(
+            "SELECT doc_id, page_index FROM failure_reviews WHERE id = ?",
+            (failure_id,),
+        ).fetchone()
+        if current is None:
+            return None, None
+        ordered = connection.execute(
+            "SELECT id FROM failure_reviews ORDER BY doc_id, page_index"
+        ).fetchall()
+    ids = [int(row["id"]) for row in ordered]
+    position = ids.index(failure_id)
+    return (
+        ids[position - 1] if position > 0 else None,
+        ids[position + 1] if position + 1 < len(ids) else None,
     )

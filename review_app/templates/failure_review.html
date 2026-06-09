@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Failure {{ failure.doc_id }}/{{ failure.page_index }} | NoteVision OMR</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="topbar compact">
+    <div>
+      <h1>Разбор OMR failure</h1>
+      <p>{{ failure.doc_id }}, страница {{ failure.page_index }},
+         тип {{ failure.page_type or 'не указан' }}</p>
+    </div>
+    <a class="button" href="/failures">Назад к failures</a>
+  </header>
+  <main class="review-layout">
+    <section class="media-panel">
+      <h2>Исходная страница</h2>
+      <a href="/failure-media/{{ failure.id }}/scan" target="_blank">
+        <img class="scan" src="/failure-media/{{ failure.id }}/scan"
+             alt="Скан {{ failure.doc_id }}, страница {{ failure.page_index }}">
+      </a>
+      <h2>Audiveris log</h2>
+      {% if failure.log_path %}
+        <p><a class="button" href="/failure-media/{{ failure.id }}/log"
+              target="_blank">Открыть полный лог</a></p>
+      {% endif %}
+      <pre class="log-excerpt">{{ values.audiveris_log_excerpt or 'Лог не найден.' }}</pre>
+      <h2>Fallback 400 DPI</h2>
+      {% if failure.fallback_400_status %}
+        <dl class="fallback-details">
+          <dt>Статус</dt><dd>{{ failure.fallback_400_status }}</dd>
+          <dt>Runtime</dt>
+          <dd>{{ failure.fallback_400_runtime_seconds or 0 }} секунд</dd>
+          {% if failure.fallback_400_error %}
+            <dt>Ошибка</dt><dd>{{ failure.fallback_400_error }}</dd>
+          {% endif %}
+        </dl>
+      {% else %}
+        <p class="session-info">Fallback 400 DPI ещё не запускался или отчёт не импортирован.</p>
+      {% endif %}
+    </section>
+
+    <section class="form-panel">
+      <div class="status {{ failure.review_status }}">
+        Статус: {{ failure.review_status }}
+      </div>
+      <p class="session-info">Разбор выполняет: <strong>{{ reviewer_name }}</strong>.</p>
+      {% if errors %}
+        <div class="alert error">
+          <strong>Исправьте ошибки:</strong>
+          <ul>{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+      <form method="post" action="/failures/{{ failure.id }}">
+        <label>Причина сбоя
+          <select name="failure_reason">
+            {% for reason in failure_reasons %}
+              <option value="{{ reason }}"
+                {{ 'selected' if values.failure_reason == reason else '' }}>
+                {{ reason }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Проблема качества изображения
+          <input name="image_quality_issue"
+                 value="{{ values.image_quality_issue }}">
+        </label>
+        <label>Решение
+          <select name="decision">
+            <option value="">Не выбрано</option>
+            {% for decision in failure_decisions %}
+              <option value="{{ decision }}"
+                {{ 'selected' if values.decision == decision else '' }}>
+                {{ decision }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Фрагмент лога
+          <textarea name="audiveris_log_excerpt" rows="12">{{ values.audiveris_log_excerpt }}</textarea>
+        </label>
+        <label>Комментарий
+          <textarea name="expert_comment" rows="5">{{ values.expert_comment }}</textarea>
+        </label>
+        <div class="form-actions">
+          <button name="action" value="draft">Save draft</button>
+          <button class="primary" name="action" value="reviewed">Mark reviewed</button>
+        </div>
+      </form>
+      <nav class="review-navigation">
+        {% if previous_id %}
+          <a class="button" href="/failures/{{ previous_id }}">Previous</a>
+        {% else %}<span></span>{% endif %}
+        {% if next_id %}
+          <a class="button" href="/failures/{{ next_id }}">Next</a>
+        {% endif %}
+      </nav>
+    </section>
+  </main>
+</body>
+</html>

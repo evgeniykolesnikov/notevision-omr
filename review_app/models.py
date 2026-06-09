@@ -2,6 +2,46 @@
 
 REVIEW_STATUSES = ("not_reviewed", "draft", "completed")
 PAGE_USABLE_VALUES = ("yes", "partial", "no")
+FAILURE_REASONS = (
+    "small_interline",
+    "invalid_image",
+    "low_contrast",
+    "cropped",
+    "rotated_or_perspective",
+    "mixed_layout",
+    "handwritten_notation",
+    "audiveris_process_error",
+    "timeout",
+    "musicxml_export_error",
+    "unknown_failure",
+)
+FAILURE_DECISIONS = (
+    "retry_same",
+    "retry_preprocessed",
+    "retry_400dpi",
+    "exclude_from_omr",
+    "requires_manual_review",
+    "accepted_failure",
+)
+FAILURE_REVIEW_STATUSES = ("draft", "reviewed")
+FAILURE_EXPORT_FIELDS = (
+    "doc_id",
+    "page_index",
+    "page_type",
+    "failure_status",
+    "failure_reason",
+    "image_quality_issue",
+    "decision",
+    "audiveris_log_excerpt",
+    "expert_comment",
+    "review_status",
+    "updated_at",
+    "fallback_400_status",
+    "fallback_400_mxl_path",
+    "fallback_400_midi_path",
+    "fallback_400_runtime_seconds",
+    "fallback_400_error",
+)
 
 COUNTER_FIELDS = (
     "checked_measures",
