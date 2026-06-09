@@ -162,6 +162,59 @@ Baseline-классификатор выделяет горизонтальны�
 python scripts/run_pipeline.py --manifest outputs/pages/rsl01004470876/manifest.csv --out outputs/predictions/rsl01004470876_page_predictions.csv
 ```
 
+## Train page classifier
+
+Обучаемый classifier является исследовательским расширением rule-based
+detector. По умолчанию для обучения и оценки используются только строки
+`manual_previous` и `manual_thesis`; `template_prediction` не считается
+ground truth. Train/validation split выполняется по `doc_id`, поэтому страницы
+одного документа не попадают в обе части.
+
+Classical baseline извлекает brightness, contrast, black pixel ratio, edge
+density, горизонтальные/staff-like линии и connected components, затем
+сравнивает Logistic Regression и Random Forest:
+
+```powershell
+python scripts/train_page_classifier.py `
+  --labels data/labels/pages_validated_thesis.csv `
+  --pages-dir outputs/pages `
+  --target has_music `
+  --model classical `
+  --out-dir outputs/reports/page_classifier
+```
+
+CNN baseline использует MobileNetV3 Small. Pretrained weights загружаются,
+если доступны; иначе модель создаётся без них. Аугментации ограничены небольшим
+поворотом, brightness/contrast, лёгким blur и resize/crop. Flip и агрессивная
+perspective transformation не применяются.
+
+```powershell
+python scripts/train_page_classifier.py `
+  --labels data/labels/pages_validated_thesis.csv `
+  --pages-dir outputs/pages `
+  --target has_music `
+  --model cnn `
+  --epochs 30 `
+  --batch-size 16 `
+  --out-dir outputs/reports/page_classifier
+```
+
+Возможен также target `page_type`. Отчёты сохраняются в выбранном `out-dir`,
+а модели — в `models/page_classifier.joblib` или `models/page_classifier.pt`.
+PyTorch/torchvision нужны только для CNN.
+
+Применение сохранённой модели:
+
+```powershell
+python scripts/predict_page_classifier.py `
+  --model models/page_classifier.pt `
+  --pages-dir outputs/pages `
+  --out outputs/reports/page_classifier_predictions.csv
+```
+
+Отсутствующая или повреждённая страница записывается в predictions CSV со
+статусом `failed` и не останавливает весь batch.
+
 ## Evaluate music page detection
 
 Для сравнения прогнозов с ручной разметкой и расчёта accuracy, precision,

@@ -284,6 +284,27 @@ CSV/JSON являются исследовательскими контракт�
 Audiveris не должны выполняться внутри HTTP-запроса: web-приложение должно
 создавать задачу, а worker — выполнять её асинхронно.
 
+### 7.1. Research extension: обучаемый page classifier
+
+В исследовательское расширение MVP добавлены два обучаемых baseline:
+
+- classical ML: Logistic Regression и Random Forest на интерпретируемых
+  визуальных признаках страницы;
+- CNN: MobileNetV3 Small с transfer learning при доступности pretrained weights.
+
+Ground truth для обучения и оценки ограничен источниками `manual_previous` и
+`manual_thesis`. Автоматические `template_prediction` исключаются. Разбиение
+выполняется по `doc_id`, чтобы страницы одного документа не попадали
+одновременно в train и validation. Это позволяет сравнивать ML classifier с
+rule-based detector на одной ручной validation-выборке и снижает риск утечки
+особенностей конкретного издания.
+
+Для CNN применяются только консервативные аугментации: поворот до 3 градусов,
+brightness/contrast jitter, лёгкий blur и resize/crop. Flip и агрессивные
+perspective transformations исключены, поскольку могут нарушать физическую
+структуру нотной страницы. Обучаемый classifier не заменяет OMR: он уменьшает
+число ложных запусков Audiveris на `title`, `text` и `blank` страницах.
+
 ## 8. Ограничения MVP
 
 - Собственная OMR-модель с нуля не обучается.
