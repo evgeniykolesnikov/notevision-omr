@@ -373,6 +373,34 @@ SQLite-файл, сканы и аудио не коммитятся. Для вн
 только на время согласованной экспертной проверки и выключать сразу после
 сеанса. Используйте уникальный сильный пароль и не публикуйте ссылку открыто.
 
+## Expert review metrics
+
+После экспорта оценок из `/export/expert_review.csv` рассчитайте экспертные
+метрики:
+
+```bash
+python scripts/calculate_expert_review_metrics.py --input path/to/expert_review.csv
+```
+
+Результаты сохраняются в
+`outputs/reports/expert_review_metrics.csv` и
+`outputs/reports/expert_review_summary.md`. Качественные метрики считаются
+только по завершённым отзывам. Пустые количественные поля исключаются из
+расчёта и не заменяются нулями.
+
+Формулы:
+
+- measure accuracy = `sum(correct_measures) / sum(checked_measures)`;
+- note event error rate =
+  `sum(pitch_errors + duration_errors + missing_notes + extra_notes) /
+  sum(reference_notes)`;
+- pitch/duration error rate используют `matched_notes` как знаменатель;
+- missing/extra note rate используют `reference_notes` как знаменатель.
+
+Техническая успешность создания MXL/MIDI `141/150` приводится в Markdown только
+как отдельный контекст и не смешивается с экспертной оценкой музыкального
+содержания.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
