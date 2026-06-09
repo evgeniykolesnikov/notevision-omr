@@ -498,6 +498,51 @@ status и лучший recovered variant.
 python -m review_app.import_failures --report outputs/reports/omr_failure_report.csv
 ```
 
+## Run corpus analysis
+
+После добавления PDF/MRC в `data/inbox` основной корпус можно обновить одной
+командой:
+
+```bat
+python scripts/run_corpus_analysis.py ^
+  --inbox data/inbox ^
+  --raw-dir data/raw ^
+  --pages-dir outputs/pages ^
+  --labels-dir data/labels ^
+  --reports-dir outputs/reports ^
+  --docs-dir docs/thesis ^
+  --resume
+```
+
+Orchestrator последовательно запускает существующие скрипты импорта,
+инвентаризации, извлечения PDF-страниц, detector, построения labels template,
+статистики корпуса и detector/error reports. Если уже существует
+`pages_validated_thesis.csv`, ручные метки переносятся в обновлённую разметку
+через `merge_validated_labels.py`.
+
+Проверить план без создания или изменения файлов:
+
+```bat
+python scripts/run_corpus_analysis.py ^
+  --inbox data/inbox ^
+  --raw-dir data/raw ^
+  --pages-dir outputs/pages ^
+  --labels-dir data/labels ^
+  --reports-dir outputs/reports ^
+  --docs-dir docs/thesis ^
+  --dry-run
+```
+
+Поддерживаются `--doc-id`, `--limit-docs`, `--skip-existing`, `--resume`,
+`--fail-fast` и `--continue-on-error`. Журнал сохраняется в
+`outputs/reports/corpus_analysis_run_log.csv`, сводка — в
+`outputs/reports/corpus_analysis_run_summary.md`.
+
+По умолчанию скрипт **не запускает Audiveris и OMR**. Сформировать только
+управляемую OMR-выборку можно флагом `--prepare-omr-sample`. Полный отдельный
+OMR-запуск включается только явно через `--run-omr` и при необходимости
+`--audiveris-bin`.
+
 ## Данные и результаты
 
 Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
