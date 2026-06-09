@@ -95,6 +95,31 @@ class OmrCandidateAdapterTests(unittest.TestCase):
             [True, True],
         )
 
+    def test_expanded_evaluation_sample_is_already_selected(self) -> None:
+        candidates = pd.DataFrame(
+            {
+                "doc_id": ["doc-a", "doc-b"],
+                "page_index": [1, 2],
+                "image_path": ["pages/a.png", "pages/b.png"],
+                "has_music_manual": [1, 0],
+                "cnn_prediction": [1, 1],
+                "classical_prediction": [1, 0],
+                "page_type": ["music", "title"],
+                "sample_group": ["random_music", "model_disagreement"],
+            }
+        )
+
+        normalized = adapt_omr_candidates(candidates)
+
+        self.assertEqual(
+            normalized[NORMALIZED_SELECTED].tolist(),
+            [True, True],
+        )
+        self.assertEqual(
+            normalized[NORMALIZED_INPUT_KIND].tolist(),
+            ["image_path", "image_path"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

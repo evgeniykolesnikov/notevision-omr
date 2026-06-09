@@ -6,7 +6,8 @@ import pandas as pd
 
 BASE_COLUMNS = {"doc_id", "page_index"}
 LEGACY_COLUMNS = {"preprocessed_path", "exists"}
-THESIS_COLUMNS = {"image_path", "has_music", "page_type"}
+THESIS_BASE_COLUMNS = {"image_path", "page_type"}
+THESIS_MUSIC_COLUMNS = {"has_music", "has_music_manual"}
 
 NORMALIZED_INPUT_PATH = "_candidate_input_path"
 NORMALIZED_EXISTS = "_candidate_exists"
@@ -51,12 +52,15 @@ def adapt_omr_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
         )
 
     supports_legacy = LEGACY_COLUMNS.issubset(candidates.columns)
-    supports_thesis = THESIS_COLUMNS.issubset(candidates.columns)
+    supports_thesis = (
+        THESIS_BASE_COLUMNS.issubset(candidates.columns)
+        and bool(THESIS_MUSIC_COLUMNS.intersection(candidates.columns))
+    )
     if not supports_legacy and not supports_thesis:
         raise ValueError(
             "Candidates must use either the legacy columns "
             "(exists, preprocessed_path) or the thesis columns "
-            "(image_path, has_music, page_type)"
+            "(image_path, page_type, has_music or has_music_manual)"
         )
 
     normalized = candidates.copy()
@@ -86,8 +90,13 @@ def adapt_omr_candidates(candidates: pd.DataFrame) -> pd.DataFrame:
             continue
 
         if _nonempty(image_path):
-            eligible = (
-                _binary_music(row.get("has_music", ""))
+            has_music_value = row.get(
+                "has_music",
+                row.get("has_music_manual", ""),
+            )
+            is_evaluation_sample = _nonempty(row.get("sample_group", ""))
+            eligible = is_evaluation_sample or (
+                _binary_music(has_music_value)
                 and str(row.get("page_type", "")).strip().lower()
                 in MUSIC_PAGE_TYPES
             )

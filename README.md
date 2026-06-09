@@ -330,6 +330,38 @@ python scripts/build_omr_candidates.py --labels data/labels/pages_validated.csv 
 `exists` показывает, создан ли файл. Доступны фильтр `--doc-id` и ограничение
 `--limit N`.
 
+### Expanded OMR evaluation sample
+
+Для воспроизводимого эксперимента ВКР на 300 страницах используется
+приоритетная выборка из существующих PNG. В неё сначала включаются прежние OMR
+failures, recovered fallback-страницы, расхождения CNN/Random Forest, mixed и
+low-confidence страницы; оставшиеся места заполняются случайными музыкальными
+кандидатами с фиксированным seed.
+
+```powershell
+python scripts/build_omr_eval_sample.py `
+  --labels data/labels/pages_validated_thesis.csv `
+  --pages-dir outputs/pages `
+  --out data/labels/omr_eval_sample_300_thesis.csv `
+  --summary outputs/reports/omr_eval_sample_300_summary.md `
+  --sample-size 300 `
+  --random-seed 42
+```
+
+После сборки выборки основной OMR запускается отдельно:
+
+```powershell
+python scripts/extract_omr_pages.py --candidates data/labels/omr_eval_sample_300_thesis.csv --raw-dir data/raw --out-dir outputs/omr_pages_300_sample --dpi 300
+python scripts/run_audiveris_omr.py --candidates data/labels/omr_eval_sample_300_thesis.csv --omr-pages-dir outputs/omr_pages_300_sample --out-dir outputs/omr_300dpi_sample --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe" --resume --skip-existing
+```
+
+Выборка является приоритетной диагностической, а не полностью случайной:
+technical success rate по ней нужно показывать отдельно от результата
+предыдущего эксперимента `141/150`.
+Наличие `sample_group` означает, что строки уже отобраны builder-скриптом:
+OMR adapter не отбрасывает включённые disagreement/false-positive страницы по
+их ручному `page_type`.
+
 ## Run OMR from candidates
 
 Рекомендуемый процесс: сначала повторно извлечь OMR-кандидатов из исходных PDF
@@ -348,7 +380,8 @@ python scripts/run_audiveris_omr.py --candidates data/labels/omr_eval_sample_the
 ```
 
 Поддерживаются старый формат с `exists` и `preprocessed_path`, новый thesis
-формат с `image_path`, `has_music`, `page_type`, а также смешанные CSV. В
+формат с `image_path`, `page_type` и `has_music` либо `has_music_manual`, а
+также смешанные CSV. В
 смешанной строке заполненный `preprocessed_path` сохраняет старое поведение;
 иначе используется `image_path`.
 
