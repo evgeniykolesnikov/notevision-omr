@@ -85,19 +85,17 @@ def filter_review_rows(
     exclude_reviewers: Iterable[str] = (),
 ) -> tuple[list[dict[str, str]], list[str]]:
     """Apply report filters and return rows plus matched exclusions."""
-    excluded_names = {
-        _normalized_reviewer_name(name)
-        for name in exclude_reviewers
-        if _normalized_reviewer_name(name)
-    }
-    matched_exclusions = sorted(
-        {
-            str(row.get("reviewer", "")).strip()
-            for row in rows
-            if _normalized_reviewer_name(row.get("reviewer")) in excluded_names
-        },
-        key=str.casefold,
-    )
+    requested_exclusions: dict[str, str] = {}
+    for name in exclude_reviewers:
+        normalized = _normalized_reviewer_name(name)
+        if normalized and normalized not in requested_exclusions:
+            requested_exclusions[normalized] = " ".join(str(name).split())
+    excluded_names = set(requested_exclusions)
+    for row in rows:
+        reviewer_name = str(row.get("reviewer", "")).strip()
+        normalized = _normalized_reviewer_name(reviewer_name)
+        if normalized in requested_exclusions and reviewer_name:
+            requested_exclusions[normalized] = reviewer_name
     filtered = [
         row
         for row in rows
@@ -107,7 +105,7 @@ def filter_review_rows(
             or row.get("review_status", "").strip() == "completed"
         )
     ]
-    return filtered, matched_exclusions
+    return filtered, sorted(requested_exclusions.values(), key=str.casefold)
 
 
 def _page_key(row: dict[str, str]) -> tuple[str, int]:

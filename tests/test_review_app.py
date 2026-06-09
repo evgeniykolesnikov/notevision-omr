@@ -454,11 +454,31 @@ class ReviewAppHttpTests(unittest.TestCase):
         self.db_path = self.root / "review.db"
         create_package(self.package_dir)
         import_package(self.package_dir, self.db_path)
+        midi_path = (
+            self.root
+            / "outputs"
+            / "midi"
+            / "rsl01000000001"
+            / "page_001.mid"
+        )
+        mxl_path = (
+            self.root
+            / "outputs"
+            / "omr_300dpi"
+            / "rsl01000000001"
+            / "page_001"
+            / "page_001.mxl"
+        )
+        midi_path.parent.mkdir(parents=True)
+        mxl_path.parent.mkdir(parents=True)
+        midi_path.write_bytes(b"midi")
+        mxl_path.write_bytes(b"mxl")
         self.client = TestClient(
             create_app(
                 db_path=self.db_path,
                 package_dir=self.package_dir,
                 password="test-secret",
+                project_root=self.root,
             )
         )
 
@@ -486,6 +506,9 @@ class ReviewAppHttpTests(unittest.TestCase):
         response = self.client.get("/", follow_redirects=False)
         self.assertEqual(response.status_code, 303)
         self.assertTrue(response.headers["location"].startswith("/login"))
+        midi = self.client.get("/media/1/midi", follow_redirects=False)
+        self.assertEqual(midi.status_code, 303)
+        self.assertTrue(midi.headers["location"].startswith("/login"))
 
     def test_http_draft_and_complete_review(self) -> None:
         self.login()
@@ -559,8 +582,30 @@ class ReviewAppHttpTests(unittest.TestCase):
         audio = self.client.get("/media/1/audio")
         self.assertEqual(audio.status_code, 200)
         self.assertEqual(audio.headers["content-type"], "audio/mpeg")
+        midi = self.client.get("/media/1/midi")
+        self.assertEqual(midi.status_code, 200)
+        self.assertEqual(midi.content, b"midi")
+        self.assertIn("attachment", midi.headers["content-disposition"])
+        self.assertIn(
+            "notevision_rsl01000000001_page_001.mid",
+            midi.headers["content-disposition"],
+        )
+        mxl = self.client.get("/media/1/mxl")
+        self.assertEqual(mxl.status_code, 200)
+        self.assertEqual(mxl.content, b"mxl")
+        self.assertEqual(mxl.headers["content-type"], "application/octet-stream")
+        self.assertIn("attachment", mxl.headers["content-disposition"])
         missing = self.client.get("/media/999/audio")
         self.assertEqual(missing.status_code, 404)
+        self.assertEqual(self.client.get("/media/2/midi").status_code, 404)
+        self.assertEqual(self.client.get("/media/2/mxl").status_code, 404)
+        self.assertIn("Скачать MIDI", page.text)
+        self.assertIn("Скачать MXL / MusicXML", page.text)
+        page_without_results = self.client.get("/review/2")
+        self.assertEqual(page_without_results.status_code, 200)
+        self.assertNotIn("Скачать MIDI", page_without_results.text)
+        self.assertNotIn("Скачать MXL / MusicXML", page_without_results.text)
+        self.assertIn("не найдены", page_without_results.text)
         export = self.client.get("/export/expert_review.csv")
         self.assertEqual(export.status_code, 200)
 

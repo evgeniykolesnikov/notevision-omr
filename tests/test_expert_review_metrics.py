@@ -150,6 +150,42 @@ class ExpertReviewMetricsTests(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
         self.assertEqual(analysis["reviewer_mean_scores"], {"Expert B": 3.0})
 
+    def test_report_excludes_igor_and_lists_reviewers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            input_path = root / "reviews.csv"
+            metrics_path = root / "metrics.csv"
+            summary_path = root / "summary.md"
+            rows = [
+                review_row(reviewer="Valid Expert"),
+                review_row(
+                    reviewer_id="2",
+                    reviewer="Igor",
+                    page_index="2",
+                    usability_score="1",
+                ),
+            ]
+            with input_path.open("w", encoding="utf-8", newline="") as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=list(rows[0]))
+                writer.writeheader()
+                writer.writerows(rows)
+
+            analysis = write_expert_review_reports(
+                input_path,
+                metrics_path,
+                summary_path,
+                completed_only=True,
+                exclude_reviewers=["Igor", "Absent Test Reviewer"],
+            )
+
+            self.assertEqual(analysis["experts_count"], 1)
+            summary = summary_path.read_text(encoding="utf-8")
+            self.assertIn("Включённые эксперты: Valid Expert", summary)
+            self.assertIn(
+                "Исключённые эксперты: Absent Test Reviewer, Igor",
+                summary,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -77,6 +77,18 @@ class ReviewProgressTests(unittest.TestCase):
         self.assertIn("Алексей", markdown)
         self.assertIn("6.7%", markdown)
 
+    def test_progress_excludes_igor(self) -> None:
+        igor, _ = get_or_create_reviewer(self.db_path, "Igor")
+        self._save(1, igor, "completed")
+
+        rows = collect_review_progress(
+            self.db_path,
+            total=30,
+            exclude_reviewers=["Igor"],
+        )
+
+        self.assertNotIn("Igor", {row["reviewer"] for row in rows})
+
 
 if __name__ == "__main__":
     unittest.main()

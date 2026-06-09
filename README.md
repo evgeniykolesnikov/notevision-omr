@@ -343,6 +343,13 @@ SQLite и экспортируются в CSV, совместимый с thesis-
 доступен в необязательном раскрывающемся блоке «Расширенная количественная
 оценка».
 
+На странице проверки также доступны защищённые ссылки для скачивания общего
+аудио, отдельных MP3-дорожек, MIDI и MXL/MusicXML. Ссылки MIDI/MXL
+показываются только при наличии соответствующего файла в экспертном пакете
+или стандартных каталогах `outputs/midi`, `outputs/omr_300dpi` и
+`outputs/omr`. Файлы выдаются после авторизации и не раскрывают абсолютные
+локальные пути.
+
 Установка и импорт плоского пакета:
 
 ```bat
@@ -408,10 +415,13 @@ python -m review_app.export_csv `
 ```powershell
 python -m review_app.export_csv `
   --db review_app/review_app.db `
-  --out outputs/reports/expert_review_completed.csv `
+  --out outputs/reports/expert_review_export.csv `
   --completed-only `
   --exclude-reviewer local `
-  --exclude-reviewer test
+  --exclude-reviewer Igor `
+  --exclude-reviewer Музыкант1 `
+  --exclude-reviewer Музыкант2 `
+  --exclude-reviewer Музыкант3
 ```
 
 Прогресс по экспертам:
@@ -421,10 +431,45 @@ python scripts/review_progress.py `
   --db review_app/review_app.db `
   --total 30 `
   --exclude-reviewer local `
+  --exclude-reviewer Igor `
+  --exclude-reviewer Музыкант1 `
+  --exclude-reviewer Музыкант2 `
+  --exclude-reviewer Музыкант3 `
   --markdown-out outputs/reports/expert_review_progress.md
 ```
 
 В таблице `filled = completed + draft`, а `progress = filled / total`.
+
+### Excluding invalid/test reviewers
+
+Некорректные или тестовые оценки не удаляются из SQLite. Они исключаются
+воспроизводимо на уровне read-only экспорта, мониторинга и расчёта метрик с
+помощью повторяемого флага `--exclude-reviewer`. Например, оценки `Igor`
+сохраняются в базе для аудита, но не входят в итоговые показатели:
+
+```powershell
+python -m review_app.export_csv `
+  --db review_app/review_app.db `
+  --out outputs/reports/expert_review_export.csv `
+  --completed-only `
+  --exclude-reviewer local `
+  --exclude-reviewer Igor `
+  --exclude-reviewer Музыкант1 `
+  --exclude-reviewer Музыкант2 `
+  --exclude-reviewer Музыкант3
+
+python scripts/review_progress.py `
+  --db review_app/review_app.db `
+  --total 30 `
+  --exclude-reviewer local `
+  --exclude-reviewer Igor `
+  --exclude-reviewer Музыкант1 `
+  --exclude-reviewer Музыкант2 `
+  --exclude-reviewer Музыкант3
+```
+
+Список включённых и исключённых экспертов фиксируется в Markdown summary
+метрик. Это позволяет повторить расчёт без удаления исходных оценок.
 
 ## Expert review metrics
 
@@ -439,10 +484,13 @@ python scripts/calculate_expert_review_metrics.py --input path/to/expert_review.
 
 ```powershell
 python scripts/calculate_expert_review_metrics.py `
-  --input outputs/reports/expert_review.csv `
+  --input outputs/reports/expert_review_export.csv `
   --completed-only `
   --exclude-reviewer local `
-  --exclude-reviewer test
+  --exclude-reviewer Igor `
+  --exclude-reviewer Музыкант1 `
+  --exclude-reviewer Музыкант2 `
+  --exclude-reviewer Музыкант3
 ```
 
 Результаты сохраняются в

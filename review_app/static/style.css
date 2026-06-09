@@ -127,6 +127,12 @@ audio { width: 100%; }
   background: #e8e6df;
 }
 .tracks { display: grid; gap: .8rem; }
+.result-downloads {
+  margin-top: 1.2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.download-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
 .failure-row { grid-template-columns: 4rem 1fr 1fr auto auto; }
 .log-excerpt {
   max-height: 42vh;

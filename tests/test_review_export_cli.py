@@ -128,6 +128,22 @@ class ReviewExportCliTests(unittest.TestCase):
         self.assertIn("Exported reviews: 1", stdout.getvalue())
         self.assertIn(str(output), stdout.getvalue())
 
+    def test_export_excludes_igor_without_deleting_review(self) -> None:
+        igor, _ = get_or_create_reviewer(self.db_path, "Igor")
+        self._save(igor, "completed", "no")
+        output = self.root / "without-igor.csv"
+
+        count = export_reviews(
+            self.db_path,
+            output,
+            exclude_reviewers=["Igor"],
+        )
+
+        self.assertEqual(count, 2)
+        with output.open(encoding="utf-8-sig", newline="") as csv_file:
+            rows = list(csv.DictReader(csv_file))
+        self.assertNotIn("Igor", {row["reviewer"] for row in rows})
+
 
 if __name__ == "__main__":
     unittest.main()

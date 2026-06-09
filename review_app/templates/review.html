@@ -24,6 +24,7 @@
       <h2>Общее аудио</h2>
       <audio controls preload="metadata"
              src="/media/{{ item.item_number }}/audio"></audio>
+      <p><a href="/media/{{ item.item_number }}/audio?download=true">Скачать общее аудио</a></p>
       {% if item.track_paths %}
         <h2>Отдельные партии</h2>
         <div class="tracks">
@@ -32,10 +33,29 @@
               Дорожка {{ "%02d"|format(loop.index) }}
               <audio controls preload="metadata"
                      src="/media/{{ item.item_number }}/track/{{ loop.index }}"></audio>
+              <a href="/media/{{ item.item_number }}/track/{{ loop.index }}?download=true">
+                Скачать дорожку {{ "%02d"|format(loop.index) }}
+              </a>
             </label>
           {% endfor %}
         </div>
       {% endif %}
+      <section class="result-downloads">
+        <h2>Файлы распознавания</h2>
+        <div class="download-actions">
+          {% if downloads.midi %}
+            <a class="button" href="/media/{{ item.item_number }}/midi">Скачать MIDI</a>
+          {% endif %}
+          {% if downloads.mxl %}
+            <a class="button" href="/media/{{ item.item_number }}/mxl">
+              Скачать MXL / MusicXML
+            </a>
+          {% endif %}
+        </div>
+        {% if not downloads.midi and not downloads.mxl %}
+          <small>Файлы MIDI и MXL для этой страницы не найдены.</small>
+        {% endif %}
+      </section>
     </section>
 
     <section class="form-panel">

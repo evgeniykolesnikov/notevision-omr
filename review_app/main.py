@@ -37,6 +37,7 @@ from review_app.database import (
 from review_app.export_csv import build_export_csv
 from review_app.export_failures import build_failure_export_csv
 from review_app.failure_schemas import validate_failure_submission
+from review_app.media_files import download_filename, find_review_result_file
 from review_app.models import (
     FAILURE_DECISIONS,
     FAILURE_REASONS,
@@ -150,6 +151,16 @@ def create_app(
             app.state.db_path,
             int(item["item_number"]),
         )
+        downloads = {
+            kind: find_review_result_file(
+                item,
+                kind=kind,
+                package_dir=app.state.package_dir,
+                project_root=app.state.project_root,
+            )
+            is not None
+            for kind in ("midi", "mxl")
+        }
         return templates.TemplateResponse(
             request=request,
             name="review.html",
@@ -160,6 +171,7 @@ def create_app(
                 "reviewer_name": current_reviewer(request)["name"],
                 "previous_number": previous_number,
                 "next_number": next_number,
+                "downloads": downloads,
             },
             status_code=status_code,
         )
@@ -465,6 +477,31 @@ def create_app(
             },
         )
 
+    def result_download(
+        request: Request,
+        item: dict[str, object],
+        kind: str,
+    ) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        candidate = find_review_result_file(
+            item,
+            kind=kind,
+            package_dir=app.state.package_dir,
+            project_root=app.state.project_root,
+        )
+        if candidate is None:
+            raise HTTPException(status_code=404, detail="Result file not found")
+        return FileResponse(
+            candidate,
+            filename=download_filename(item, kind),
+            media_type="audio/midi" if kind == "midi" else "application/octet-stream",
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "Accept-Ranges": "bytes",
+            },
+        )
+
     def protected_project_file(
         request: Request,
         relative_path: str,
@@ -500,21 +537,32 @@ def create_app(
         )
 
     @app.get("/media/{item_number}/audio")
-    async def audio_media(request: Request, item_number: int) -> Response:
+    async def audio_media(
+        request: Request,
+        item_number: int,
+        download: bool = False,
+    ) -> Response:
         item = get_item(app.state.db_path, item_number)
         if item is None:
             raise HTTPException(status_code=404, detail="Review item not found")
-        return protected_file(
+        response = protected_file(
             request,
             item_number,
             str(item["audio_path"]),
         )
+        if download and isinstance(response, FileResponse):
+            response.headers["Content-Disposition"] = (
+                f'attachment; filename="notevision_{item["doc_id"]}_'
+                f'page_{int(item["page_index"]):03d}_audio.mp3"'
+            )
+        return response
 
     @app.get("/media/{item_number}/track/{track_number}")
     async def track_media(
         request: Request,
         item_number: int,
         track_number: int,
+        download: bool = False,
     ) -> Response:
         item = get_item(app.state.db_path, item_number)
         if item is None:
@@ -522,11 +570,36 @@ def create_app(
         track_paths = item["track_paths"]
         if track_number < 1 or track_number > len(track_paths):
             raise HTTPException(status_code=404, detail="Track not found")
-        return protected_file(
+        response = protected_file(
             request,
             item_number,
             str(track_paths[track_number - 1]),
         )
+        if download and isinstance(response, FileResponse):
+            response.headers["Content-Disposition"] = (
+                f'attachment; filename="notevision_{item["doc_id"]}_'
+                f'page_{int(item["page_index"]):03d}_'
+                f'track_{track_number:02d}.mp3"'
+            )
+        return response
+
+    @app.get("/media/{item_number}/midi")
+    async def midi_download(request: Request, item_number: int) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        item = get_item(app.state.db_path, item_number)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Review item not found")
+        return result_download(request, item, "midi")
+
+    @app.get("/media/{item_number}/mxl")
+    async def mxl_download(request: Request, item_number: int) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        item = get_item(app.state.db_path, item_number)
+        if item is None:
+            raise HTTPException(status_code=404, detail="Review item not found")
+        return result_download(request, item, "mxl")
 
     @app.get("/failure-media/{failure_id}/scan")
     async def failure_scan_media(
