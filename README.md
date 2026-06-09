@@ -352,6 +352,18 @@ python -m review_app.import_package --package-dir outputs/expert_review_for_send
 uvicorn review_app.main:app --host 127.0.0.1 --port 8000
 ```
 
+Для пароля с кириллицей в PowerShell используйте переменную окружения напрямую:
+
+```powershell
+$env:REVIEW_APP_PASSWORD = "Надёжный-пароль-2026"
+python -m review_app.import_package --package-dir outputs/expert_review_for_send
+uvicorn review_app.main:app --host 127.0.0.1 --port 8000
+```
+
+На странице входа эксперт вводит общий пароль и своё имя. Имя определяет
+независимый прогресс эксперта, поэтому каждому музыканту нужно использовать
+одно и то же написание имени при повторных входах.
+
 Текущая версия показывает всем экспертам один и тот же импортированный набор
 из 30 страниц. Разделение выполняется на уровне прогресса и оценок. В схеме
 данных зарезервировано поле `review_set`, чтобы позднее назначать разным
@@ -373,6 +385,47 @@ SQLite-файл, сканы и аудио не коммитятся. Для вн
 только на время согласованной экспертной проверки и выключать сразу после
 сеанса. Используйте уникальный сильный пароль и не публикуйте ссылку открыто.
 
+Пример временного туннеля через `cloudflared`:
+
+```powershell
+cloudflared tunnel --url http://127.0.0.1:8000
+```
+
+### Мониторинг и экспорт экспертной проверки
+
+Полный CSV можно выгрузить из SQLite без запуска web-приложения. Команда
+открывает БД только для чтения и не выполняет миграции:
+
+```powershell
+python -m review_app.export_csv `
+  --db review_app/review_app.db `
+  --out outputs/reports/expert_review.csv
+```
+
+Для итогового анализа обычно нужны только завершённые оценки без локальных
+тестовых пользователей:
+
+```powershell
+python -m review_app.export_csv `
+  --db review_app/review_app.db `
+  --out outputs/reports/expert_review_completed.csv `
+  --completed-only `
+  --exclude-reviewer local `
+  --exclude-reviewer test
+```
+
+Прогресс по экспертам:
+
+```powershell
+python scripts/review_progress.py `
+  --db review_app/review_app.db `
+  --total 30 `
+  --exclude-reviewer local `
+  --markdown-out outputs/reports/expert_review_progress.md
+```
+
+В таблице `filled = completed + draft`, а `progress = filled / total`.
+
 ## Expert review metrics
 
 После экспорта оценок из `/export/expert_review.csv` рассчитайте экспертные
@@ -380,6 +433,16 @@ SQLite-файл, сканы и аудио не коммитятся. Для вн
 
 ```bash
 python scripts/calculate_expert_review_metrics.py --input path/to/expert_review.csv
+```
+
+Для отчёта только по завершённым оценкам и без тестовых экспертов:
+
+```powershell
+python scripts/calculate_expert_review_metrics.py `
+  --input outputs/reports/expert_review.csv `
+  --completed-only `
+  --exclude-reviewer local `
+  --exclude-reviewer test
 ```
 
 Результаты сохраняются в

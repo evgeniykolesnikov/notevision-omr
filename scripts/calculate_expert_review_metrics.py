@@ -74,6 +74,42 @@ def _reviewer_key(row: dict[str, str]) -> str:
     return f"name:{reviewer}" if reviewer else ""
 
 
+def _normalized_reviewer_name(value: object) -> str:
+    return " ".join(str(value or "").split()).casefold()
+
+
+def filter_review_rows(
+    rows: list[dict[str, str]],
+    *,
+    completed_only: bool = False,
+    exclude_reviewers: Iterable[str] = (),
+) -> tuple[list[dict[str, str]], list[str]]:
+    """Apply report filters and return rows plus matched exclusions."""
+    excluded_names = {
+        _normalized_reviewer_name(name)
+        for name in exclude_reviewers
+        if _normalized_reviewer_name(name)
+    }
+    matched_exclusions = sorted(
+        {
+            str(row.get("reviewer", "")).strip()
+            for row in rows
+            if _normalized_reviewer_name(row.get("reviewer")) in excluded_names
+        },
+        key=str.casefold,
+    )
+    filtered = [
+        row
+        for row in rows
+        if _normalized_reviewer_name(row.get("reviewer")) not in excluded_names
+        and (
+            not completed_only
+            or row.get("review_status", "").strip() == "completed"
+        )
+    ]
+    return filtered, matched_exclusions
+
+
 def _page_key(row: dict[str, str]) -> tuple[str, int]:
     doc_id = str(row.get("doc_id", "")).strip()
     try:
@@ -164,6 +200,19 @@ def analyze_expert_reviews(rows: list[dict[str, str]]) -> dict[str, object]:
         for row in completed
         if (score := _optional_float(row.get("usability_score"))) is not None
     ]
+    reviewer_score_values: defaultdict[str, list[float]] = defaultdict(list)
+    for row in completed:
+        score = _optional_float(row.get("usability_score"))
+        reviewer_name = str(row.get("reviewer", "")).strip()
+        if reviewer_name and score is not None:
+            reviewer_score_values[reviewer_name].append(score)
+    reviewer_mean_scores = {
+        reviewer: mean(values)
+        for reviewer, values in sorted(
+            reviewer_score_values.items(),
+            key=lambda item: item[0].casefold(),
+        )
+    }
     problem_rates = {
         field: {
             "count": sum(_flag(row.get(field)) for row in completed),
@@ -251,6 +300,15 @@ def analyze_expert_reviews(rows: list[dict[str, str]]) -> dict[str, object]:
         "usable_counts": usable_counts,
         "mean_usability_score": mean(scores) if scores else None,
         "usability_score_count": len(scores),
+        "reviewer_mean_scores": reviewer_mean_scores,
+        "included_reviewers": sorted(
+            {
+                str(row.get("reviewer", "")).strip()
+                for row in rows
+                if str(row.get("reviewer", "")).strip()
+            },
+            key=str.casefold,
+        ),
         "problem_rates": problem_rates,
         "quantitative": quantitative,
         "multi_reviewer_pages": len(disagreements),
@@ -392,6 +450,16 @@ def build_summary_markdown(analysis: dict[str, object]) -> str:
     )
     if not disagreement_rows:
         disagreement_rows = "| Нет страниц с несколькими завершёнными оценками |  |  |  |  |"
+    reviewer_score_rows = "\n".join(
+        f"| {reviewer} | {_format_metric(score)} |"
+        for reviewer, score in analysis["reviewer_mean_scores"].items()
+    )
+    if not reviewer_score_rows:
+        reviewer_score_rows = "| Нет завершённых оценок | н/д |"
+    included_reviewers = ", ".join(analysis["included_reviewers"]) or "нет"
+    excluded_reviewers = ", ".join(
+        analysis.get("excluded_reviewers", [])
+    ) or "нет"
 
     return f"""# Экспертная оценка качества OMR
 
@@ -426,6 +494,16 @@ CSV-экспорт web app обычно содержит только созда
 
 Средняя оценка `usability_score`: **{_format_metric(analysis['mean_usability_score'])}**
 по {analysis['usability_score_count']} завершённым отзывам с заполненной оценкой.
+
+### Средняя оценка по экспертам
+
+| Эксперт | Средний usability_score |
+|---|---:|
+{reviewer_score_rows}
+
+Включённые эксперты: {included_reviewers}.
+
+Исключённые эксперты: {excluded_reviewers}.
 
 ## Отмеченные проблемы
 
@@ -475,9 +553,19 @@ def write_expert_review_reports(
     input_path: Path,
     metrics_path: Path,
     summary_path: Path,
+    *,
+    completed_only: bool = False,
+    exclude_reviewers: Iterable[str] = (),
 ) -> dict[str, object]:
     """Calculate metrics and write CSV plus Markdown reports."""
-    analysis = analyze_expert_reviews(read_review_export(input_path))
+    rows, matched_exclusions = filter_review_rows(
+        read_review_export(input_path),
+        completed_only=completed_only,
+        exclude_reviewers=exclude_reviewers,
+    )
+    analysis = analyze_expert_reviews(rows)
+    analysis["excluded_reviewers"] = matched_exclusions
+    analysis["completed_only"] = completed_only
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     with metrics_path.open("w", encoding="utf-8", newline="") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=METRICS_COLUMNS)
@@ -501,6 +589,17 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("outputs/reports/expert_review_summary.md"),
     )
+    parser.add_argument(
+        "--completed-only",
+        action="store_true",
+        help="Analyze only completed reviews.",
+    )
+    parser.add_argument(
+        "--exclude-reviewer",
+        action="append",
+        default=[],
+        help="Reviewer name to exclude; repeat for multiple reviewers.",
+    )
     return parser.parse_args()
 
 
@@ -511,6 +610,8 @@ def main() -> None:
             args.input,
             args.metrics_out,
             args.summary_out,
+            completed_only=args.completed_only,
+            exclude_reviewers=args.exclude_reviewer,
         )
     except (FileNotFoundError, ValueError, OSError, csv.Error) as error:
         raise SystemExit(f"Error: {error}") from error

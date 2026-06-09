@@ -8,6 +8,7 @@ from pathlib import Path
 from scripts.calculate_expert_review_metrics import (
     PROBLEM_FIELDS,
     analyze_expert_reviews,
+    filter_review_rows,
     read_review_export,
     write_expert_review_reports,
 )
@@ -121,6 +122,33 @@ class ExpertReviewMetricsTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "missing required columns"):
                 read_review_export(path)
+
+    def test_filters_and_reviewer_averages_are_reported(self) -> None:
+        rows = [
+            review_row(reviewer="Expert A", usability_score="5"),
+            review_row(
+                reviewer_id="2",
+                reviewer="Expert B",
+                usability_score="3",
+            ),
+            review_row(
+                reviewer_id="2",
+                reviewer="Expert B",
+                page_index="2",
+                review_status="draft",
+                usability_score="",
+            ),
+        ]
+        filtered, excluded = filter_review_rows(
+            rows,
+            completed_only=True,
+            exclude_reviewers=[" expert a "],
+        )
+        analysis = analyze_expert_reviews(filtered)
+
+        self.assertEqual(excluded, ["Expert A"])
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(analysis["reviewer_mean_scores"], {"Expert B": 3.0})
 
 
 if __name__ == "__main__":

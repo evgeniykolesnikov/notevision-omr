@@ -87,18 +87,20 @@ REVIEW_FIELDS = (
 )
 
 EXPORT_FIELDS = (
+    "review_id",
+    "item_number",
     "doc_id",
     "page_index",
     "reviewer_id",
     "reviewer",
+    "review_status",
     "review_date",
-    *COUNTER_FIELDS,
     "page_usable",
+    "usability_score",
+    *PROBLEM_FIELDS,
     "dominant_error",
     "expert_comment",
     "requires_new_omr",
-    "review_status",
+    *COUNTER_FIELDS,
     "updated_at",
-    "usability_score",
-    *PROBLEM_FIELDS,
 )

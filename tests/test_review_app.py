@@ -550,6 +550,17 @@ class ReviewAppHttpTests(unittest.TestCase):
         media = self.client.get("/media/1/scan")
         self.assertEqual(media.status_code, 200)
         self.assertEqual(media.content, b"png")
+        self.assertEqual(media.headers["content-type"], "image/png")
+        self.assertEqual(
+            media.headers["cache-control"],
+            "public, max-age=3600",
+        )
+        self.assertEqual(media.headers["accept-ranges"], "bytes")
+        audio = self.client.get("/media/1/audio")
+        self.assertEqual(audio.status_code, 200)
+        self.assertEqual(audio.headers["content-type"], "audio/mpeg")
+        missing = self.client.get("/media/999/audio")
+        self.assertEqual(missing.status_code, 404)
         export = self.client.get("/export/expert_review.csv")
         self.assertEqual(export.status_code, 200)
 

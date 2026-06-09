@@ -19,7 +19,10 @@ def build_auth_token(password: str) -> str:
 
 
 def verify_password(candidate: str, expected: str) -> bool:
-    return bool(expected) and hmac.compare_digest(candidate, expected)
+    return bool(expected) and hmac.compare_digest(
+        candidate.encode("utf-8"),
+        expected.encode("utf-8"),
+    )
 
 
 def verify_auth_token(token: str | None, password: str) -> bool:

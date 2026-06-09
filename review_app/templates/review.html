@@ -30,7 +30,7 @@
           {% for track in item.track_paths %}
             <label>
               Дорожка {{ "%02d"|format(loop.index) }}
-              <audio controls preload="none"
+              <audio controls preload="metadata"
                      src="/media/{{ item.item_number }}/track/{{ loop.index }}"></audio>
             </label>
           {% endfor %}

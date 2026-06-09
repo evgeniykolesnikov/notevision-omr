@@ -457,7 +457,13 @@ def create_app(
             raise HTTPException(status_code=404, detail="Media not found") from error
         if not candidate.is_file():
             raise HTTPException(status_code=404, detail="Media not found")
-        return FileResponse(candidate)
+        return FileResponse(
+            candidate,
+            headers={
+                "Cache-Control": "public, max-age=3600",
+                "Accept-Ranges": "bytes",
+            },
+        )
 
     def protected_project_file(
         request: Request,
@@ -474,7 +480,13 @@ def create_app(
             raise HTTPException(status_code=404, detail="File not found") from error
         if not candidate.is_file():
             raise HTTPException(status_code=404, detail="File not found")
-        return FileResponse(candidate)
+        return FileResponse(
+            candidate,
+            headers={
+                "Cache-Control": "public, max-age=3600",
+                "Accept-Ranges": "bytes",
+            },
+        )
 
     @app.get("/media/{item_number}/scan")
     async def scan_media(request: Request, item_number: int) -> Response:
