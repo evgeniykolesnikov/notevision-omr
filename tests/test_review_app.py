@@ -78,6 +78,14 @@ def create_dashboard_fixture(root: Path) -> None:
         "rsl01000000001,3,title,0,outputs/pages/rsl01000000001/page_003.png,manual_thesis\n",
         encoding="utf-8",
     )
+    reports_dir = root / "outputs" / "reports"
+    reports_dir.mkdir(parents=True, exist_ok=True)
+    (reports_dir / "music_features.csv").write_text(
+        "doc_id,page_index,key_name_ru,key_name_latin,time_signature,"
+        "clefs,instruments,confidence,source\n"
+        "rsl01000000001,1,до мажор,C-dur,4/4,скрипичный,Piano,high,musicxml\n",
+        encoding="utf-8",
+    )
 
 
 class ReviewAppCoreTests(unittest.TestCase):
@@ -695,6 +703,9 @@ class ReviewAppHttpTests(unittest.TestCase):
         self.assertIn("Скачать MIDI", detail.text)
         self.assertIn("<audio", detail.text)
         self.assertIn("Открыть экспертную проверку", detail.text)
+        self.assertIn("до мажор", detail.text)
+        self.assertIn("C-dur", detail.text)
+        self.assertIn("скрипичный", detail.text)
         self.assertNotIn(str(self.root), detail.text)
 
         audio = self.client.get(

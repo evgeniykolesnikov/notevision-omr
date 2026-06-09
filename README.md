@@ -346,6 +346,37 @@ python scripts/convert_mxl_to_midi.py --input-dir outputs/omr_300dpi --out-dir o
 `notesAndRests`. Режим конвертации и ошибки сохраняются в
 `outputs/reports/midi_conversion_report.csv`.
 
+## Extract music-theoretical features
+
+Характеристики, явно записанные в MXL/MusicXML, извлекаются через `music21`:
+тональность, размер, ключи, партии и инструменты. Результат используется
+document dashboard и страницей отдельного скана.
+
+```powershell
+python scripts/extract_music_features.py --mxl-dir outputs/omr --out outputs/reports/music_features.csv --summary outputs/reports/music_features_summary.md --recursive
+```
+
+Для объединённого прохода по primary и fallback-результатам аргумент можно
+повторять:
+
+```powershell
+python scripts/extract_music_features.py --mxl-dir outputs/omr_300dpi --mxl-dir outputs/omr_400dpi_fallback --mxl-dir outputs/omr_preprocessed_fallback --out outputs/reports/music_features.csv --summary outputs/reports/music_features_summary.md --recursive
+```
+
+- `source=musicxml` означает, что тональность прочитана непосредственно из
+  MusicXML;
+- `source=not_found` означает, что значение отсутствует и extractor его не
+  выдумывает;
+- `confidence` отражает надёжность извлечения: явная key signature получает
+  `high`, отсутствующая — `low`.
+
+Если key signature присутствует, но лад в MusicXML не указан, extractor не
+угадывает его по нотам и сохраняет обе допустимые тональности, например
+`D-dur / b-moll`.
+
+Битые и пустые файлы не останавливают batch: для них сохраняется
+`extraction_status=failed` и диагностическое поле `error`.
+
 ## Manual Review Workflow
 
 1. Построить редактируемую статическую галерею:
