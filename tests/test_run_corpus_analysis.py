@@ -111,6 +111,9 @@ class CorpusAnalysisTests(unittest.TestCase):
                 "bad_scan": 0,
                 "unknown": 1,
             },
+            "skipped_missing_pdf": 0,
+            "skipped_missing_mrc": 0,
+            "incomplete_documents": 0,
             "errors": 0,
         }
 
@@ -142,6 +145,19 @@ class CorpusAnalysisTests(unittest.TestCase):
             calls.append(list(command))
             if "organize_raw_files.py" in command[1]:
                 return CommandResult(list(command), 1, stderr="import failed")
+            if "build_document_inventory.py" in command[1]:
+                args.labels_dir.mkdir(parents=True, exist_ok=True)
+                (args.labels_dir / "document_inventory.csv").write_text(
+                    "doc_id,pdf_status,mrc_status\nrsl001,exists,parsed\n",
+                    encoding="utf-8",
+                )
+            if "extract_pages.py" in command[1]:
+                output_dir = Path(command[command.index("--out") + 1])
+                output_dir.mkdir(parents=True, exist_ok=True)
+                (output_dir / "manifest.csv").write_text(
+                    "doc_id,page_index,image_path\nrsl001,1,page.png\n",
+                    encoding="utf-8",
+                )
             return CommandResult(list(command), 0, stdout="ok")
 
         logs, summary = run_corpus_analysis(args, runner=runner)
@@ -155,6 +171,84 @@ class CorpusAnalysisTests(unittest.TestCase):
         self.assertTrue(
             (args.reports_dir / "corpus_analysis_run_log.csv").is_file()
         )
+
+    def test_missing_pdf_is_skipped_without_pipeline_error(self) -> None:
+        args = make_args(self.root, continue_on_error=True)
+        mrc_only = args.raw_dir / "rsl002"
+        mrc_only.mkdir(parents=True)
+        (mrc_only / "record.mrc").write_bytes(b"mrc")
+        calls = []
+
+        def runner(command):
+            calls.append(list(command))
+            if "build_document_inventory.py" in command[1]:
+                args.labels_dir.mkdir(parents=True, exist_ok=True)
+                (args.labels_dir / "document_inventory.csv").write_text(
+                    "doc_id,pdf_status,mrc_status\n"
+                    "rsl001,exists,parsed\n"
+                    "rsl002,missing,parsed\n",
+                    encoding="utf-8",
+                )
+            if "extract_pages.py" in command[1]:
+                output_dir = Path(command[command.index("--out") + 1])
+                output_dir.mkdir(parents=True, exist_ok=True)
+                (output_dir / "manifest.csv").write_text(
+                    "doc_id,page_index,image_path\nrsl001,1,page.png\n",
+                    encoding="utf-8",
+                )
+            return CommandResult(list(command), 0, stdout="ok")
+
+        logs, summary = run_corpus_analysis(args, runner=runner)
+
+        extraction_commands = [
+            command for command in calls if "extract_pages.py" in command[1]
+        ]
+        detector_commands = [
+            command for command in calls if "run_pipeline.py" in command[1]
+        ]
+        self.assertEqual(len(extraction_commands), 1)
+        self.assertNotIn("rsl002", " ".join(extraction_commands[0]))
+        self.assertEqual(len(detector_commands), 1)
+        self.assertNotIn("rsl002", " ".join(detector_commands[0]))
+        skipped = [
+            row
+            for row in logs
+            if row["status"] == "skipped_incomplete"
+            and "rsl002" in str(row["message"])
+        ]
+        self.assertEqual(len(skipped), 2)
+        self.assertEqual(summary["skipped_missing_pdf"], 1)
+        self.assertEqual(summary["incomplete_documents"], 1)
+        self.assertEqual(summary["errors"], 0)
+
+    def test_missing_manifest_skips_detector(self) -> None:
+        args = make_args(self.root, continue_on_error=True)
+        calls = []
+
+        def runner(command):
+            calls.append(list(command))
+            if "build_document_inventory.py" in command[1]:
+                args.labels_dir.mkdir(parents=True, exist_ok=True)
+                (args.labels_dir / "document_inventory.csv").write_text(
+                    "doc_id,pdf_status,mrc_status\nrsl001,exists,parsed\n",
+                    encoding="utf-8",
+                )
+            return CommandResult(list(command), 0, stdout="ok")
+
+        logs, summary = run_corpus_analysis(args, runner=runner)
+
+        self.assertFalse(
+            any("run_pipeline.py" in command[1] for command in calls)
+        )
+        self.assertTrue(
+            any(
+                row["stage"] == "detector"
+                and row["status"] == "skipped_incomplete"
+                and "manifest.csv is missing" in str(row["message"])
+                for row in logs
+            )
+        )
+        self.assertEqual(summary["errors"], 0)
 
 
 if __name__ == "__main__":

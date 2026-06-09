@@ -203,6 +203,68 @@ def find_document_dirs(
     return directories
 
 
+def select_inventory_documents(
+    args: argparse.Namespace,
+    logs: list[dict[str, object]],
+) -> list[Path]:
+    """Select only inventory documents with an available PDF."""
+    inventory = _read_rows(args.labels_dir / "document_inventory.csv")
+    if not inventory:
+        return find_document_dirs(
+            args.raw_dir,
+            doc_id=args.doc_id,
+            limit_docs=args.limit_docs,
+        )
+
+    selected = sorted(inventory, key=lambda row: row.get("doc_id", ""))
+    if args.doc_id:
+        selected = [
+            row for row in selected if row.get("doc_id", "") == args.doc_id
+        ]
+    if args.limit_docs is not None:
+        selected = selected[: args.limit_docs]
+
+    document_dirs: list[Path] = []
+    for row in selected:
+        doc_id = str(row.get("doc_id", "")).strip()
+        pdf_status = str(row.get("pdf_status", "")).strip()
+        mrc_status = str(row.get("mrc_status", "")).strip()
+        if mrc_status == "missing":
+            logs.append(
+                {
+                    "stage": "inventory",
+                    "command": "",
+                    "status": "skipped_incomplete",
+                    "returncode": "",
+                    "runtime_seconds": 0.0,
+                    "message": (
+                        f"Skipped MRC metadata for {doc_id}: "
+                        "mrc_status=missing; PDF page pipeline may continue."
+                    ),
+                }
+            )
+        if pdf_status != "exists":
+            reason = (
+                f"Skipped {doc_id}: pdf_status={pdf_status or 'unknown'}; "
+                "page extraction and detector require a PDF."
+            )
+            print(f"  SKIPPED INCOMPLETE: {reason}")
+            for stage in ("extracting", "detector"):
+                logs.append(
+                    {
+                        "stage": stage,
+                        "command": "",
+                        "status": "skipped_incomplete",
+                        "returncode": "",
+                        "runtime_seconds": 0.0,
+                        "message": reason,
+                    }
+                )
+            continue
+        document_dirs.append(args.raw_dir / doc_id)
+    return document_dirs
+
+
 def build_document_commands(
     document_dirs: Sequence[Path],
     args: argparse.Namespace,
@@ -239,6 +301,35 @@ def build_document_commands(
             )
         )
     return extraction, detection
+
+
+def filter_detector_commands(
+    commands: Sequence[Sequence[str]],
+    args: argparse.Namespace,
+    logs: list[dict[str, object]],
+) -> list[list[str]]:
+    """Keep detector commands only when their manifest exists or is planned."""
+    runnable: list[list[str]] = []
+    for command in commands:
+        manifest = _command_output_path(command, "--manifest")
+        if args.dry_run or (manifest is not None and manifest.is_file()):
+            runnable.append(list(command))
+            continue
+        doc_id = manifest.parent.name if manifest is not None else "unknown"
+        logs.append(
+            {
+                "stage": "detector",
+                "command": _command_text(command),
+                "status": "skipped_incomplete",
+                "returncode": "",
+                "runtime_seconds": 0.0,
+                "message": (
+                    f"Skipped {doc_id}: manifest.csv is missing after page "
+                    "extraction; detector was not started."
+                ),
+            }
+        )
+    return runnable
 
 
 def _command_output_path(command: Sequence[str], flag: str) -> Path | None:
@@ -403,6 +494,16 @@ def collect_summary(args: argparse.Namespace, logs: list[dict[str, object]]) -> 
     inventory = _read_rows(args.labels_dir / "document_inventory.csv")
     statistics_rows = _read_rows(args.reports_dir / "dataset_statistics.csv")
     statistics = statistics_rows[0] if statistics_rows else {}
+    missing_pdf = {
+        row.get("doc_id", "")
+        for row in inventory
+        if row.get("pdf_status") == "missing"
+    }
+    missing_mrc = {
+        row.get("doc_id", "")
+        for row in inventory
+        if row.get("mrc_status") == "missing"
+    }
     return {
         "documents": len(inventory),
         "pdf_exists": sum(row.get("pdf_status") == "exists" for row in inventory),
@@ -412,6 +513,9 @@ def collect_summary(args: argparse.Namespace, logs: list[dict[str, object]]) -> 
             page_type: int(float(statistics.get(page_type, 0) or 0))
             for page_type in PAGE_TYPES
         },
+        "skipped_missing_pdf": len(missing_pdf),
+        "skipped_missing_mrc": len(missing_mrc),
+        "incomplete_documents": len(missing_pdf | missing_mrc),
         "errors": sum(row["status"] == "error" for row in logs),
     }
 
@@ -440,6 +544,9 @@ def write_run_reports(
 | Документов в inventory | {summary['documents']} |
 | PDF exists | {summary['pdf_exists']} |
 | MRC parsed | {summary['mrc_parsed']} |
+| Skipped: missing PDF | {summary['skipped_missing_pdf']} |
+| Skipped: missing MRC | {summary['skipped_missing_mrc']} |
+| Incomplete documents | {summary['incomplete_documents']} |
 | Страниц всего | {summary['total_pages']} |
 | Ошибок этапов | {summary['errors']} |
 
@@ -485,23 +592,24 @@ def run_corpus_analysis(
                 write_run_reports(args, logs, summary)
             return logs, summary
 
-    document_dirs = find_document_dirs(
-        args.raw_dir,
-        doc_id=args.doc_id,
-        limit_docs=args.limit_docs,
-    )
+    document_dirs = select_inventory_documents(args, logs)
     extraction, detection = build_document_commands(document_dirs, args)
-    dynamic_stages = [
-        ("extracting", "Extracting pages", extraction),
-        ("detector", "Running detector", detection),
-    ]
-    for offset, (key, label, commands) in enumerate(dynamic_stages, start=3):
-        print(f"[{offset}/7] {label}")
-        if not execute_commands(key, commands, args, logs, runner=runner):
-            summary = collect_summary(args, logs)
-            if not args.dry_run:
-                write_run_reports(args, logs, summary)
-            return logs, summary
+    print("[3/7] Extracting pages")
+    if not execute_commands(
+        "extracting", extraction, args, logs, runner=runner
+    ):
+        summary = collect_summary(args, logs)
+        if not args.dry_run:
+            write_run_reports(args, logs, summary)
+        return logs, summary
+
+    print("[4/7] Running detector")
+    detection = filter_detector_commands(detection, args, logs)
+    if not execute_commands("detector", detection, args, logs, runner=runner):
+        summary = collect_summary(args, logs)
+        if not args.dry_run:
+            write_run_reports(args, logs, summary)
+        return logs, summary
 
     print("[5/7] Building labels template")
     if not args.dry_run:
@@ -604,6 +712,9 @@ def main() -> None:
     print(f"Documents in inventory: {summary['documents']}")
     print(f"PDF exists: {summary['pdf_exists']}")
     print(f"MRC parsed: {summary['mrc_parsed']}")
+    print(f"Skipped missing PDF: {summary['skipped_missing_pdf']}")
+    print(f"Skipped missing MRC: {summary['skipped_missing_mrc']}")
+    print(f"Incomplete documents: {summary['incomplete_documents']}")
     print(f"Total pages: {summary['total_pages']}")
     for page_type in PAGE_TYPES:
         print(f"{page_type}: {summary['page_types'][page_type]}")
