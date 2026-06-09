@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inbox | NoteVision OMR</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div><h1>Inbox</h1><p>Локальные PDF/MRC, ожидающие анализа корпуса.</p></div>
+    <a class="button" href="/documents">Документы</a>
+  </header>
+  <main class="container">
+    <div class="summary-cards">
+      <article><strong>{{ overview.files|length }}</strong><span>всего файлов</span></article>
+      <article><strong>{{ overview.pdf_files|length }}</strong><span>PDF</span></article>
+      <article><strong>{{ overview.mrc_files|length }}</strong><span>MRC/MARC</span></article>
+      <article><strong>{{ overview.incomplete_pairs|length }}</strong><span>неполных пар</span></article>
+    </div>
+    {% if overview.incomplete_pairs %}
+      <h2>Неполные пары</h2>
+      <ul>{% for pair in overview.incomplete_pairs %}<li>{{ pair.key }}: отсутствует {{ pair.missing }}</li>{% endfor %}</ul>
+    {% endif %}
+    <h2>Файлы</h2>
+    {% if overview.files %}<ul class="file-list">{% for file in overview.files %}<li>{{ file }}</li>{% endfor %}</ul>
+    {% else %}<div class="empty-state">Папка `data/inbox` отсутствует или пуста.</div>{% endif %}
+    <h2>Обновление корпуса</h2>
+    <pre class="command-box">python scripts/run_corpus_analysis.py --inbox data/inbox --raw-dir data/raw --pages-dir outputs/pages --labels-dir data/labels --reports-dir outputs/reports --docs-dir docs/thesis --resume</pre>
+    <p>Web-интерфейс не запускает Audiveris или corpus analysis внутри HTTP-запроса.</p>
+  </main>
+</body>
+</html>

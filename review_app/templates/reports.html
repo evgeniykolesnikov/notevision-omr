@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Отчёты | NoteVision OMR</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div><h1>Отчёты</h1><p>Существующие Markdown и CSV-артефакты MVP.</p></div>
+    <a class="button" href="/documents">Документы</a>
+  </header>
+  <main class="container">
+    {% if reports %}
+      <div class="report-list">
+      {% for report in reports %}
+        <article>
+          <div><strong>{{ report.title }}</strong><small>{{ report.path }}</small></div>
+          <a class="button" href="/reports/file/{{ report.key }}">Открыть</a>
+        </article>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">Ни один из известных отчётов пока не создан.</div>
+    {% endif %}
+  </main>
+</body>
+</html>

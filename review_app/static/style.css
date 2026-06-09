@@ -65,6 +65,7 @@ audio { width: 100%; }
 .topbar.compact { padding-block: .8rem; }
 .header-actions { display: flex; gap: .6rem; align-items: center; }
 .container { max-width: 1050px; margin: 2rem auto; padding: 0 1rem; }
+.container.wide { max-width: 1500px; }
 .filters { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
 .filters a {
   padding: .5rem .8rem;
@@ -133,6 +134,114 @@ audio { width: 100%; }
   border-top: 1px solid var(--line);
 }
 .download-actions { display: flex; gap: .6rem; flex-wrap: wrap; }
+.table-wrap { overflow-x: auto; }
+.dashboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+}
+.dashboard-table th, .dashboard-table td {
+  padding: .75rem;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.dashboard-table th { background: #eceae4; }
+.compact-counts { min-width: 10rem; }
+.compact-counts span { display: block; white-space: nowrap; }
+.metadata-card, .page-card, .summary-cards article, .report-list article {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 1rem;
+}
+.metadata-grid {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content 1fr;
+  gap: .45rem 1rem;
+  margin: 0;
+}
+.metadata-grid dt, .feature-details dt { font-weight: 700; }
+.metadata-grid dd, .feature-details dd { margin: 0; }
+.page-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.page-card img, .missing-preview {
+  width: 100%;
+  height: 300px;
+  object-fit: contain;
+  background: #e8e6df;
+}
+.missing-preview { display: grid; place-items: center; color: var(--muted); }
+.page-card h2 { margin: .8rem 0 .25rem; font-size: 1.15rem; }
+.page-detail-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, .7fr);
+  gap: 1rem;
+  align-items: start;
+}
+.page-detail-main, .page-detail-sidebar {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+}
+.page-detail-scan {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  background: #e8e6df;
+}
+.page-scan-panel { padding: 1rem; }
+.page-detail-sidebar audio { width: 100%; margin-top: .6rem; }
+.track-preview {
+  display: grid;
+  gap: .35rem;
+  padding-top: .6rem;
+  border-top: 1px solid var(--line);
+}
+.track-preview:first-child { padding-top: 0; border-top: 0; }
+.feature-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: .35rem .7rem;
+}
+.feature-list dt { font-weight: 700; }
+.feature-list dd { margin: 0; overflow-wrap: anywhere; }
+.muted-message { color: var(--muted); }
+.feature-details { margin-top: .8rem; }
+.feature-details summary { cursor: pointer; font-weight: 700; }
+.feature-details dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: .3rem .6rem;
+}
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: .8rem;
+}
+.summary-cards strong { display: block; font-size: 1.7rem; }
+.summary-cards span { color: var(--muted); }
+.file-list { columns: 2; }
+.command-box {
+  overflow-x: auto;
+  padding: 1rem;
+  border-radius: 8px;
+  background: #171916;
+  color: #e8eee9;
+}
+.report-list { display: grid; gap: .7rem; }
+.report-list article {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+}
+.error-text { color: var(--danger); }
 .failure-row { grid-template-columns: 4rem 1fr 1fr auto auto; }
 .log-excerpt {
   max-height: 42vh;
@@ -216,6 +325,7 @@ audio { width: 100%; }
 
 @media (max-width: 900px) {
   .review-layout { grid-template-columns: 1fr; }
+  .page-detail-layout { grid-template-columns: 1fr; }
   .item-row { grid-template-columns: 3rem 1fr; }
   .failure-row { grid-template-columns: 3rem 1fr; }
   .item-row .status, .item-row .button { justify-self: start; }
@@ -226,4 +336,7 @@ audio { width: 100%; }
   .form-grid { grid-template-columns: 1fr; }
   .simple-review, .problem-list { grid-template-columns: 1fr; }
   .review-layout { padding: .6rem; }
+  .metadata-grid { grid-template-columns: max-content 1fr; }
+  .file-list { columns: 1; }
+  .report-list article { align-items: flex-start; flex-direction: column; }
 }

@@ -34,6 +34,15 @@ from review_app.database import (
     save_failure_review,
     save_review,
 )
+from review_app.dashboard import (
+    available_reports,
+    dashboard_audio_path,
+    dashboard_artifact_path,
+    load_dashboard_data,
+    load_inbox_overview,
+    load_page_detail,
+    report_path,
+)
 from review_app.export_csv import build_export_csv
 from review_app.export_failures import build_failure_export_csv
 from review_app.failure_schemas import validate_failure_submission
@@ -311,6 +320,104 @@ def create_app(
                 "items": items,
                 "selected_status": selected_status,
                 "counts": counts,
+                "reviewer_name": reviewer["name"],
+            },
+        )
+
+    @app.get("/documents", response_class=HTMLResponse)
+    async def documents_page(request: Request) -> HTMLResponse:
+        if not session_ready(request):
+            return login_redirect(request)
+        reviewer = current_reviewer(request)
+        assert reviewer is not None
+        dashboard = load_dashboard_data(app.state.project_root)
+        return templates.TemplateResponse(
+            request=request,
+            name="documents.html",
+            context={
+                "documents": dashboard["documents"],
+                "reviewer_name": reviewer["name"],
+            },
+        )
+
+    @app.get("/documents/{doc_id}", response_class=HTMLResponse)
+    async def document_detail(request: Request, doc_id: str) -> HTMLResponse:
+        if not session_ready(request):
+            return login_redirect(request)
+        reviewer = current_reviewer(request)
+        assert reviewer is not None
+        dashboard = load_dashboard_data(app.state.project_root)
+        document = dashboard["document_map"].get(doc_id)
+        if document is None:
+            raise HTTPException(status_code=404, detail="Document not found")
+        return templates.TemplateResponse(
+            request=request,
+            name="document_detail.html",
+            context={
+                "document": document,
+                "pages": dashboard["pages_by_doc"].get(doc_id, []),
+                "reviewer_name": reviewer["name"],
+            },
+        )
+
+    @app.get(
+        "/documents/{doc_id}/pages/{page_index}",
+        response_class=HTMLResponse,
+    )
+    async def document_page_detail(
+        request: Request,
+        doc_id: str,
+        page_index: int,
+    ) -> HTMLResponse:
+        if not session_ready(request):
+            return login_redirect(request)
+        reviewer = current_reviewer(request)
+        assert reviewer is not None
+        detail = load_page_detail(
+            app.state.project_root,
+            app.state.db_path,
+            app.state.package_dir,
+            doc_id,
+            page_index,
+            int(reviewer["id"]),
+        )
+        if detail is None:
+            raise HTTPException(status_code=404, detail="Page not found")
+        return templates.TemplateResponse(
+            request=request,
+            name="page_detail.html",
+            context={
+                **detail,
+                "reviewer_name": reviewer["name"],
+            },
+        )
+
+    @app.get("/inbox", response_class=HTMLResponse)
+    async def inbox_page(request: Request) -> HTMLResponse:
+        if not session_ready(request):
+            return login_redirect(request)
+        reviewer = current_reviewer(request)
+        assert reviewer is not None
+        return templates.TemplateResponse(
+            request=request,
+            name="inbox.html",
+            context={
+                "overview": load_inbox_overview(app.state.project_root),
+                "reviewer_name": reviewer["name"],
+            },
+        )
+
+    @app.get("/reports", response_class=HTMLResponse)
+    async def reports_page(request: Request) -> HTMLResponse:
+        if not session_ready(request):
+            return login_redirect(request)
+        reviewer = current_reviewer(request)
+        assert reviewer is not None
+        return templates.TemplateResponse(
+            request=request,
+            name="reports.html",
+            context={
+                "reports": available_reports(app.state.project_root),
                 "reviewer_name": reviewer["name"],
             },
         )
@@ -600,6 +707,97 @@ def create_app(
         if item is None:
             raise HTTPException(status_code=404, detail="Review item not found")
         return result_download(request, item, "mxl")
+
+    @app.get("/document-media/{doc_id}/{page_index}/{kind}")
+    async def document_media(
+        request: Request,
+        doc_id: str,
+        page_index: int,
+        kind: str,
+    ) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        if kind not in {"image", "midi", "mxl", "audio"}:
+            raise HTTPException(status_code=404, detail="Artifact not found")
+        candidate = (
+            dashboard_audio_path(
+                app.state.project_root,
+                app.state.db_path,
+                app.state.package_dir,
+                doc_id,
+                page_index,
+            )
+            if kind == "audio"
+            else dashboard_artifact_path(
+                app.state.project_root,
+                doc_id,
+                page_index,
+                kind,
+            )
+        )
+        if candidate is None:
+            raise HTTPException(status_code=404, detail="Artifact not found")
+        if kind in {"image", "audio"}:
+            return FileResponse(
+                candidate,
+                headers={
+                    "Cache-Control": "public, max-age=3600",
+                    "Accept-Ranges": "bytes",
+                },
+            )
+        extension = "mid" if kind == "midi" else "mxl"
+        return FileResponse(
+            candidate,
+            filename=f"notevision_{doc_id}_page_{page_index:03d}.{extension}",
+            media_type="audio/midi" if kind == "midi" else "application/octet-stream",
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "Accept-Ranges": "bytes",
+            },
+        )
+
+    @app.get("/document-media/{doc_id}/{page_index}/track/{track_number}")
+    async def document_track_media(
+        request: Request,
+        doc_id: str,
+        page_index: int,
+        track_number: int,
+        download: bool = False,
+    ) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        candidate = dashboard_audio_path(
+            app.state.project_root,
+            app.state.db_path,
+            app.state.package_dir,
+            doc_id,
+            page_index,
+            track_number,
+        )
+        if candidate is None:
+            raise HTTPException(status_code=404, detail="Track not found")
+        return FileResponse(
+            candidate,
+            filename=(
+                f"notevision_{doc_id}_page_{page_index:03d}_"
+                f"track_{track_number:02d}{candidate.suffix}"
+                if download
+                else None
+            ),
+            headers={
+                "Cache-Control": "private, max-age=3600",
+                "Accept-Ranges": "bytes",
+            },
+        )
+
+    @app.get("/reports/file/{report_key}")
+    async def report_file(request: Request, report_key: str) -> Response:
+        if not session_ready(request):
+            return login_redirect(request)
+        candidate = report_path(app.state.project_root, report_key)
+        if candidate is None:
+            raise HTTPException(status_code=404, detail="Report not found")
+        return FileResponse(candidate)
 
     @app.get("/failure-media/{failure_id}/scan")
     async def failure_scan_media(

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Документы | NoteVision OMR</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>Документы корпуса</h1>
+      <p>Inventory, типы страниц, OMR и покрытие музыкальных признаков.</p>
+    </div>
+    <nav class="header-actions">
+      <a class="button" href="/">Экспертная проверка</a>
+      <a class="button" href="/inbox">Inbox</a>
+      <a class="button" href="/reports">Отчёты</a>
+    </nav>
+  </header>
+  <main class="container wide">
+    {% if documents %}
+      <div class="table-wrap">
+        <table class="dashboard-table">
+          <thead>
+            <tr>
+              <th>Документ</th><th>Метаданные</th><th>Страницы</th>
+              <th>Типы страниц</th><th>OMR</th><th>Fallback</th>
+              <th>Features</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for doc in documents %}
+            <tr>
+              <td><strong>{{ doc.doc_id }}</strong><br>
+                <span class="status {{ doc.pdf_status }}">{{ doc.pdf_status }}</span>
+              </td>
+              <td>{{ doc.title or 'Без названия' }}<br>
+                <small>{{ doc.authors or 'Автор не указан' }} · {{ doc.year or 'год неизвестен' }}</small>
+                <small>MRC: {{ doc.mrc_status }}</small>
+              </td>
+              <td>{{ doc.pages_count }}<br><small>music: {{ doc.music_pages_count }}</small></td>
+              <td class="compact-counts">
+                {% for kind in ['music','mixed','title','text','blank','unknown','bad_scan'] %}
+                  {% if doc.page_type_counts[kind] %}<span>{{ kind }}: {{ doc.page_type_counts[kind] }}</span>{% endif %}
+                {% endfor %}
+              </td>
+              <td>{{ doc.omr_success_count }} success<br>
+                <small>{{ doc.omr_failure_count }} failures</small>
+              </td>
+              <td>{{ doc.fallback_recovered_count }} recovered</td>
+              <td>{{ doc.music_features_coverage_count }} pages</td>
+              <td><a class="button primary" href="/documents/{{ doc.doc_id }}">Открыть</a></td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state">Inventory не найден или пока пуст.</div>
+    {% endif %}
+  </main>
+</body>
+</html>

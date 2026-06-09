@@ -498,6 +498,30 @@ def get_item(
     return _deserialize_item(row)
 
 
+def get_item_by_page(
+    db_path: Path,
+    doc_id: str,
+    page_index: int,
+    reviewer_id: int | None = None,
+) -> dict[str, object] | None:
+    """Return the review item for a document page, if it is in the review set."""
+    init_db(db_path)
+    with closing(connect(db_path)) as connection:
+        row = connection.execute(
+            """
+            SELECT item_number
+            FROM review_items
+            WHERE doc_id = ? AND page_index = ?
+            ORDER BY item_number
+            LIMIT 1
+            """,
+            (doc_id, page_index),
+        ).fetchone()
+    if row is None:
+        return None
+    return get_item(db_path, int(row["item_number"]), reviewer_id)
+
+
 def get_review(
     db_path: Path,
     item_number: int,

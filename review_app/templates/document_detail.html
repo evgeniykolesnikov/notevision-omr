@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ document.doc_id }} | NoteVision OMR</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>{{ document.title or document.doc_id }}</h1>
+      <p>{{ document.doc_id }} · {{ document.authors or 'Автор не указан' }} · {{ document.year or 'год неизвестен' }}</p>
+    </div>
+    <a class="button" href="/documents">Назад к документам</a>
+  </header>
+  <main class="container wide">
+    <section class="metadata-card">
+      <dl class="metadata-grid">
+        <dt>PDF</dt><dd>{{ document.pdf_status }}</dd>
+        <dt>MRC</dt><dd>{{ document.mrc_status }}</dd>
+        <dt>Страниц</dt><dd>{{ document.pages_count }}</dd>
+        <dt>Издание</dt><dd>{{ document.publication or 'unknown' }}</dd>
+        <dt>Язык</dt><dd>{{ document.language or 'unknown' }}</dd>
+        <dt>Record ID</dt><dd>{{ document.record_id or 'unknown' }}</dd>
+      </dl>
+    </section>
+    {% if pages %}
+      <div class="page-grid">
+      {% for page in pages %}
+        <article class="page-card">
+          {% if page.has_image %}
+            <a href="/document-media/{{ document.doc_id }}/{{ page.page_index }}/image" target="_blank">
+              <img src="/document-media/{{ document.doc_id }}/{{ page.page_index }}/image"
+                   alt="Страница {{ page.page_index }}" loading="lazy">
+            </a>
+          {% else %}
+            <div class="missing-preview">PNG отсутствует</div>
+          {% endif %}
+          <h2>Страница {{ page.page_index }}</h2>
+          <p><strong>{{ page.page_type }}</strong> · has_music={{ page.has_music }}</p>
+          <small>label source: {{ page.label_source or 'unknown' }}</small>
+          <p><span class="status {{ page.omr_status }}">{{ page.omr_status }}</span></p>
+          {% if page.failure_status %}<p class="error-text">Failure: {{ page.failure_status }}</p>{% endif %}
+          {% if page.fallback_status %}<p>Fallback: {{ page.fallback_status }}</p>{% endif %}
+          <div class="download-actions">
+            <a class="button primary" href="/documents/{{ document.doc_id }}/pages/{{ page.page_index }}">Открыть страницу</a>
+            {% if page.has_mxl %}<a class="button" href="/document-media/{{ document.doc_id }}/{{ page.page_index }}/mxl">MXL</a>{% endif %}
+            {% if page.has_midi %}<a class="button" href="/document-media/{{ document.doc_id }}/{{ page.page_index }}/midi">MIDI</a>{% endif %}
+          </div>
+          <details class="feature-details">
+            <summary>Музыкальные характеристики</summary>
+            <dl>
+              <dt>Тональность</dt>
+              <dd>{{ page.music_features.key_name_ru }} / {{ page.music_features.key_name_latin }}</dd>
+              <dt>Размер</dt><dd>{{ page.music_features.time_signature }}</dd>
+              <dt>Ключи</dt><dd>{{ page.music_features.clefs }}</dd>
+              <dt>Инструменты</dt><dd>{{ page.music_features.instruments }}</dd>
+              <dt>Confidence</dt><dd>{{ page.music_features.confidence }}</dd>
+              <dt>Source</dt><dd>{{ page.music_features.source }}</dd>
+            </dl>
+          </details>
+        </article>
+      {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty-state">Для документа нет строк в validated labels.</div>
+    {% endif %}
+  </main>
+</body>
+</html>

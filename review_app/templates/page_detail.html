@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ document.doc_id }} / page {{ page.page_index }} | NoteVision OMR</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>{{ document.doc_id }} / страница {{ page.page_index }}</h1>
+      <p>
+        {{ page.page_type }} · has_music={{ page.has_music }} ·
+        label source: {{ page.label_source or 'unknown' }}
+      </p>
+    </div>
+    <div class="header-actions">
+      <a class="button" href="/documents/{{ document.doc_id }}">Назад к документу</a>
+      <a class="button" href="/documents">Все документы</a>
+    </div>
+  </header>
+
+  <main class="container wide page-detail-layout">
+    <section class="page-detail-main">
+      <article class="metadata-card">
+        <h2>Статус обработки</h2>
+        <dl class="metadata-grid">
+          <dt>OMR</dt><dd>{{ page.omr_status }}</dd>
+          <dt>Primary OMR</dt><dd>{{ page.primary_omr_status or 'unknown' }}</dd>
+          <dt>400 DPI fallback</dt><dd>{{ page.fallback_400_status or 'not_run' }}</dd>
+          <dt>Preprocessing fallback</dt><dd>{{ page.preprocessing_fallback_status or 'not_run' }}</dd>
+        </dl>
+      </article>
+
+      <article class="media-panel page-scan-panel">
+        <h2>Скан страницы</h2>
+        {% if page.has_image %}
+          <a href="/document-media/{{ document.doc_id }}/{{ page.page_index }}/image" target="_blank">
+            <img class="page-detail-scan"
+                 src="/document-media/{{ document.doc_id }}/{{ page.page_index }}/image"
+                 alt="Скан {{ document.doc_id }}, страница {{ page.page_index }}">
+          </a>
+        {% else %}
+          <div class="empty-state">PNG страницы не найден.</div>
+        {% endif %}
+      </article>
+    </section>
+
+    <aside class="page-detail-sidebar">
+      <article class="metadata-card">
+        <h2>Артефакты</h2>
+        <div class="download-actions">
+          {% if page.has_mxl %}
+            <a class="button primary" href="/document-media/{{ document.doc_id }}/{{ page.page_index }}/mxl">Скачать MXL</a>
+          {% else %}
+            <span class="muted-message">MXL недоступен</span>
+          {% endif %}
+          {% if page.has_midi %}
+            <a class="button" href="/document-media/{{ document.doc_id }}/{{ page.page_index }}/midi">Скачать MIDI</a>
+          {% else %}
+            <span class="muted-message">MIDI недоступен</span>
+          {% endif %}
+        </div>
+      </article>
+
+      <article class="metadata-card">
+        <h2>Аудио-превью</h2>
+        {% if has_audio %}
+          <audio controls preload="metadata" src="/document-media/{{ document.doc_id }}/{{ page.page_index }}/audio"></audio>
+        {% else %}
+          <p class="muted-message">Audio preview is not available. MIDI can be downloaded and opened in a notation editor or DAW.</p>
+        {% endif %}
+      </article>
+
+      {% if tracks_count %}
+        <article class="metadata-card">
+          <h2>Отдельные дорожки</h2>
+          <div class="tracks">
+            {% for track_number in range(1, tracks_count + 1) %}
+              <div class="track-preview">
+                <strong>Дорожка {{ "%02d"|format(track_number) }}</strong>
+                <audio controls preload="metadata"
+                       src="/document-media/{{ document.doc_id }}/{{ page.page_index }}/track/{{ track_number }}"></audio>
+                <a href="/document-media/{{ document.doc_id }}/{{ page.page_index }}/track/{{ track_number }}?download=true">Скачать</a>
+              </div>
+            {% endfor %}
+          </div>
+        </article>
+      {% endif %}
+
+      <article class="metadata-card">
+        <h2>Музыкальные характеристики</h2>
+        {% if page.has_music_features %}
+          <dl class="feature-list">
+            <dt>Тональность</dt>
+            <dd>{{ page.music_features.key_name_ru }} / {{ page.music_features.key_name_latin }}</dd>
+            <dt>Размер</dt><dd>{{ page.music_features.time_signature }}</dd>
+            <dt>Ключи</dt><dd>{{ page.music_features.clefs }}</dd>
+            <dt>Инструменты</dt><dd>{{ page.music_features.instruments }}</dd>
+            <dt>Confidence</dt><dd>{{ page.music_features.confidence }}</dd>
+            <dt>Source</dt><dd>{{ page.music_features.source }}</dd>
+          </dl>
+        {% else %}
+          <details>
+            <summary>Музыкальные характеристики пока не извлечены</summary>
+            <p class="muted-message">Раздел заполнится после анализа MXL/MusicXML.</p>
+          </details>
+        {% endif %}
+      </article>
+
+      {% if page.omr_status in ['omr_failed', 'fallback_recovered'] or page.failure_reason %}
+        <article class="metadata-card">
+          <h2>Failure и fallback</h2>
+          <dl class="feature-list">
+            <dt>Primary</dt><dd>{{ page.primary_omr_status or 'unknown' }}</dd>
+            <dt>Причина</dt><dd>{{ page.failure_reason or 'unknown' }}</dd>
+            <dt>400 DPI</dt><dd>{{ page.fallback_400_status or 'not_run' }}</dd>
+            <dt>Preprocessing</dt><dd>{{ page.preprocessing_fallback_status or 'not_run' }}</dd>
+            <dt>Лучший вариант</dt><dd>{{ page.best_preprocessing_variant or 'нет' }}</dd>
+            <dt>Итог</dt><dd>{{ page.recovery_status or page.omr_status }}</dd>
+          </dl>
+        </article>
+      {% endif %}
+
+      <article class="metadata-card">
+        <h2>Экспертная проверка</h2>
+        {% if review_item %}
+          <a class="button primary" href="/review/{{ review_item.item_number }}">Открыть экспертную проверку</a>
+          <p class="session-info">Ваш статус: {{ review_item.review_status }}</p>
+        {% else %}
+          <p class="muted-message">Страница пока не входит в экспертный набор.</p>
+        {% endif %}
+      </article>
+    </aside>
+  </main>
+</body>
+</html>

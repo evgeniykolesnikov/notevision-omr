@@ -59,6 +59,27 @@ def create_package(package_dir: Path, item_count: int = 2) -> None:
             ).write_bytes(b"track")
 
 
+def create_dashboard_fixture(root: Path) -> None:
+    labels_dir = root / "data" / "labels"
+    labels_dir.mkdir(parents=True)
+    (labels_dir / "document_inventory.csv").write_text(
+        "doc_id,title,authors,year,language,publication,record_id,"
+        "pages_count,pdf_status,mrc_status\n"
+        "rsl001,Test score,Composer,1900,rus,Moscow,1,2,exists,parsed\n"
+        "rsl01000000001,Review score,Composer,1901,rus,Moscow,2,3,exists,parsed\n",
+        encoding="utf-8",
+    )
+    (labels_dir / "pages_validated_thesis.csv").write_text(
+        "doc_id,page_index,page_type,has_music,image_path,validation_source\n"
+        "rsl001,1,music,1,outputs/pages/rsl001/page_001.png,manual_thesis\n"
+        "rsl001,2,title,0,outputs/pages/rsl001/page_002.png,manual_thesis\n"
+        "rsl01000000001,1,music,1,outputs/pages/rsl01000000001/page_001.png,manual_thesis\n"
+        "rsl01000000001,2,music,1,outputs/pages/rsl01000000001/page_002.png,manual_thesis\n"
+        "rsl01000000001,3,title,0,outputs/pages/rsl01000000001/page_003.png,manual_thesis\n",
+        encoding="utf-8",
+    )
+
+
 class ReviewAppCoreTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_dir = tempfile.TemporaryDirectory()
@@ -67,6 +88,7 @@ class ReviewAppCoreTests(unittest.TestCase):
         self.db_path = self.root / "review.db"
         create_package(self.package_dir)
         import_package(self.package_dir, self.db_path)
+        create_dashboard_fixture(self.root)
         self.reviewer_a, _ = get_or_create_reviewer(
             self.db_path,
             "Алексей",
@@ -473,6 +495,16 @@ class ReviewAppHttpTests(unittest.TestCase):
         mxl_path.parent.mkdir(parents=True)
         midi_path.write_bytes(b"midi")
         mxl_path.write_bytes(b"mxl")
+        scan_path = (
+            self.root
+            / "outputs"
+            / "pages"
+            / "rsl01000000001"
+            / "page_001.png"
+        )
+        scan_path.parent.mkdir(parents=True)
+        scan_path.write_bytes(b"png")
+        create_dashboard_fixture(self.root)
         self.client = TestClient(
             create_app(
                 db_path=self.db_path,
@@ -627,6 +659,71 @@ class ReviewAppHttpTests(unittest.TestCase):
             follow_redirects=False,
         )
         self.assertEqual(response.status_code, 303)
+
+    def test_document_dashboard_routes(self) -> None:
+        self.login()
+
+        documents = self.client.get("/documents")
+        self.assertEqual(documents.status_code, 200)
+        self.assertIn("rsl001", documents.text)
+        self.assertIn("Test score", documents.text)
+
+        detail = self.client.get("/documents/rsl001")
+        self.assertEqual(detail.status_code, 200)
+        self.assertIn("Страница 1", detail.text)
+        self.assertIn("manual_thesis", detail.text)
+        self.assertIn("unknown", detail.text)
+
+        missing = self.client.get("/documents/rsl999")
+        self.assertEqual(missing.status_code, 404)
+        self.assertEqual(self.client.get("/inbox").status_code, 200)
+        self.assertEqual(self.client.get("/reports").status_code, 200)
+
+    def test_document_page_detail_and_media(self) -> None:
+        self.login()
+
+        document = self.client.get("/documents/rsl01000000001")
+        self.assertEqual(document.status_code, 200)
+        self.assertIn(
+            "/documents/rsl01000000001/pages/1",
+            document.text,
+        )
+
+        detail = self.client.get("/documents/rsl01000000001/pages/1")
+        self.assertEqual(detail.status_code, 200)
+        self.assertIn("Скачать MXL", detail.text)
+        self.assertIn("Скачать MIDI", detail.text)
+        self.assertIn("<audio", detail.text)
+        self.assertIn("Открыть экспертную проверку", detail.text)
+        self.assertNotIn(str(self.root), detail.text)
+
+        audio = self.client.get(
+            "/document-media/rsl01000000001/1/audio"
+        )
+        self.assertEqual(audio.status_code, 200)
+        self.assertEqual(audio.headers["content-type"], "audio/mpeg")
+        track = self.client.get(
+            "/document-media/rsl01000000001/1/track/1"
+        )
+        self.assertEqual(track.status_code, 200)
+
+    def test_document_page_detail_without_artifacts_and_missing_page(self) -> None:
+        self.login()
+
+        detail = self.client.get("/documents/rsl01000000001/pages/3")
+        self.assertEqual(detail.status_code, 200)
+        self.assertIn("MXL недоступен", detail.text)
+        self.assertIn("MIDI недоступен", detail.text)
+        self.assertIn("Audio preview is not available", detail.text)
+        self.assertIn(
+            "Страница пока не входит в экспертный набор",
+            detail.text,
+        )
+
+        missing = self.client.get(
+            "/documents/rsl01000000001/pages/999"
+        )
+        self.assertEqual(missing.status_code, 404)
 
 
 if __name__ == "__main__":

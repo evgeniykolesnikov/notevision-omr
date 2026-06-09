@@ -2,6 +2,61 @@
 
 Система анализа сканированных нотных документов.
 
+## MVP direction
+
+MVP NoteVision OMR развивается как воспроизводимый human-in-the-loop
+pipeline для библиотеки:
+
+```text
+PDF/MRC → pages → music-page detector → Audiveris → MXL/MIDI
+→ music features → expert review → reports
+```
+
+Текущая версия уже поддерживает обработку корпуса, основной и fallback OMR,
+экспертную web-проверку и экспорт метрик. Следующий этап — единый dashboard
+документов, извлечение музыкально-теоретических характеристик, обучаемый
+page classifier и расширенная стратифицированная OMR-оценка.
+
+Подробное описание ролей, сценариев, статусов и границ MVP приведено в
+[`docs/thesis/mvp_architecture.md`](docs/thesis/mvp_architecture.md).
+
+## MVP document dashboard
+
+Защищённый `review_app` содержит прикладные страницы MVP:
+
+- `/documents` — inventory и агрегированные статусы документов;
+- `/documents/<doc_id>` — metadata, страницы, labels, OMR/fallback и
+  музыкальные признаки;
+- `/inbox` — обзор локальной входящей папки и неполных PDF/MRC-пар;
+- `/reports` — ссылки на существующие Markdown/CSV-отчёты.
+
+Dashboard работает в read-only режиме: он не запускает Audiveris и не читает
+PDF внутри HTTP-запроса. Отсутствующие optional reports или artifacts
+отображаются как пустые/неизвестные значения и не приводят к ошибке страницы.
+
+### Page detail and MIDI/audio preview
+
+Каждая карточка в `/documents/<doc_id>` открывает защищённую страницу
+`/documents/<doc_id>/pages/<page_index>`. На ней собраны:
+
+- крупный PNG-скан страницы;
+- `page_type`, `has_music`, источник разметки и OMR/fallback-статусы;
+- безопасные ссылки на MXL и MIDI без раскрытия локальных путей;
+- MP3/WAV/OGG audio preview и отдельные дорожки, если они есть в экспертном
+  пакете;
+- музыкальные характеристики из `music_features.csv`;
+- переход к экспертной проверке, если страница включена в `review_items`.
+
+MIDI не передаётся браузеру как потоковое аудио. Если audio preview отсутствует,
+его можно скачать как MIDI и открыть в нотном редакторе или DAW.
+
+Запуск:
+
+```powershell
+$env:REVIEW_APP_PASSWORD = "Надёжный-пароль"
+uvicorn review_app.main:app --host 127.0.0.1 --port 8000
+```
+
 ## Цель
 
 `PDF/MRC -> страницы -> выявление нотных страниц -> OMR -> MusicXML/MIDI -> музыкальные признаки`
