@@ -261,6 +261,14 @@ audio { width: 100%; }
 }
 .fallback-details dt { font-weight: 700; }
 .fallback-details dd { margin: 0; overflow-wrap: anywhere; }
+.classification-review {
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: .75rem;
+  background: #f7f8fa;
+}
+.classification-review h2 { margin-top: 0; }
 .tracks label { color: var(--muted); }
 .form-grid {
   display: grid;

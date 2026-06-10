@@ -26,7 +26,12 @@
         ('all', 'Все'),
         ('draft', 'Черновики'),
         ('reviewed', 'Разобрано'),
-        ('unknown_failure', 'Причина неизвестна')
+        ('unknown_failure', 'Причина неизвестна'),
+        ('should_not_send', 'Should not send to OMR'),
+        ('classifier_false_positive', 'Classifier false positives'),
+        ('non_music_pages', 'Title / cover / text / blank'),
+        ('real_omr_failures', 'Real OMR failures'),
+        ('still_failed', 'Still failed after fallbacks')
       ] %}
         <a class="{{ 'active' if selected_status == value else '' }}"
            href="/failures?status={{ value }}">{{ label }} ({{ counts[value] }})</a>
@@ -44,6 +49,9 @@
             <div>
               <strong>{{ failure.failure_status }}</strong>
               <span>{{ failure.failure_reason }}</span>
+              {% if failure.corrected_page_type %}
+                <span>corrected: {{ failure.corrected_page_type }}</span>
+              {% endif %}
             </div>
             <span class="status {{ failure.review_status }}">
               {{ 'Разобрано' if failure.review_status == 'reviewed' else 'Черновик' }}

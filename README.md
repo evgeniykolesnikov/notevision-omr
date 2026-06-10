@@ -793,6 +793,18 @@ python -m review_app.import_failures --report outputs/reports/omr_failure_report
 для таблицы причин OMR-сбоев, решений по повторному запуску и анализа связи
 ошибок с качеством или типом страницы.
 
+The failure page also contains a `Page classification review` block. It records
+the corrected page type, corrected `has_music`, whether the page should be sent
+to OMR, and the classifier error type. Optional `has_music_manual`,
+`cnn_prediction`, `classical_prediction`, `sample_group`, and `source_reason`
+columns are imported when present in the labels or sample CSV.
+
+Use the filters on `/failures` to isolate classifier false positives,
+non-music pages sent to OMR, real OMR failures, and pages still failed after
+all fallbacks. `/export/failure_review.csv` includes these corrections and can
+be used as a reviewed hard-negative dataset for page-classifier retraining.
+The original `page_type` remains separate from the corrected value.
+
 ## OMR fallback at 400 DPI
 
 400 DPI используется только как fallback-эксперимент для страниц, на которых

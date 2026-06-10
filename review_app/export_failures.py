@@ -15,7 +15,7 @@ def build_failure_export_csv(db_path: Path) -> str:
     writer = csv.DictWriter(buffer, fieldnames=FAILURE_EXPORT_FIELDS)
     writer.writeheader()
     for failure in list_failure_reviews(db_path):
-        writer.writerow(
-            {field: failure.get(field, "") for field in FAILURE_EXPORT_FIELDS}
-        )
+        row = {field: failure.get(field, "") for field in FAILURE_EXPORT_FIELDS}
+        row["original_page_type"] = failure.get("page_type", "")
+        writer.writerow(row)
     return buffer.getvalue()

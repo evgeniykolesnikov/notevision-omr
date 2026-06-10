@@ -3,12 +3,15 @@
 import csv
 import importlib.util
 import io
+import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 from review_app.database import (
     get_failure_review,
+    init_db,
     list_failure_reviews,
     save_failure_review,
 )
@@ -134,6 +137,94 @@ class FailureReviewCoreTests(unittest.TestCase):
         self.assertEqual(len(stored), 1)
         self.assertEqual(stored[0]["failure_reason"], "unknown_failure")
 
+    def test_schema_migration_adds_classifier_feedback_fields(self) -> None:
+        legacy_db = self.root / "legacy.db"
+        with closing(sqlite3.connect(legacy_db)) as connection:
+            connection.execute(
+                """
+                CREATE TABLE failure_reviews (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    doc_id TEXT NOT NULL,
+                    page_index INTEGER NOT NULL,
+                    page_type TEXT NOT NULL DEFAULT '',
+                    image_path TEXT NOT NULL,
+                    omr_dir TEXT NOT NULL,
+                    failure_reason TEXT NOT NULL DEFAULT 'unknown_failure',
+                    review_status TEXT NOT NULL DEFAULT 'draft'
+                )
+                """
+            )
+            connection.execute(
+                """
+                INSERT INTO failure_reviews (
+                    doc_id, page_index, page_type, image_path, omr_dir
+                ) VALUES ('legacy-doc', 7, 'music', 'scan.png', 'omr')
+                """
+            )
+            connection.commit()
+        init_db(legacy_db)
+        with closing(sqlite3.connect(legacy_db)) as connection:
+            columns = {
+                row[1]
+                for row in connection.execute(
+                    "PRAGMA table_info(failure_reviews)"
+                ).fetchall()
+            }
+        self.assertTrue(
+            {
+                "corrected_page_type",
+                "corrected_has_music",
+                "should_send_to_omr",
+                "classifier_error_type",
+                "cnn_prediction",
+            }.issubset(columns)
+        )
+        migrated = list_failure_reviews(legacy_db)
+        self.assertEqual(migrated[0]["doc_id"], "legacy-doc")
+        self.assertEqual(migrated[0]["corrected_page_type"], "")
+
+    def test_import_optional_classifier_metadata(self) -> None:
+        with self.labels_path.open(
+            "w", encoding="utf-8", newline=""
+        ) as csv_file:
+            writer = csv.DictWriter(
+                csv_file,
+                fieldnames=(
+                    "doc_id",
+                    "page_index",
+                    "page_type",
+                    "has_music_manual",
+                    "cnn_prediction",
+                    "classical_prediction",
+                    "sample_group",
+                    "source_reason",
+                ),
+            )
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "doc_id": "rsl001",
+                    "page_index": 3,
+                    "page_type": "title",
+                    "has_music_manual": "0",
+                    "cnn_prediction": "1",
+                    "classical_prediction": "1",
+                    "sample_group": "model_disagreement",
+                    "source_reason": "decorative staff lines",
+                }
+            )
+        self.import_source()
+        stored = list_failure_reviews(self.db_path)[0]
+        self.assertEqual(stored["has_music_manual"], "0")
+        self.assertEqual(stored["cnn_prediction"], "1")
+        self.assertEqual(stored["sample_group"], "model_disagreement")
+
+    def test_import_without_classifier_metadata_still_works(self) -> None:
+        self.import_source()
+        stored = list_failure_reviews(self.db_path)[0]
+        self.assertEqual(stored["cnn_prediction"], "")
+        self.assertEqual(stored["source_reason"], "")
+
     def test_save_draft_and_mark_reviewed(self) -> None:
         self.import_source()
         failure = list_failure_reviews(self.db_path)[0]
@@ -175,6 +266,70 @@ class FailureReviewCoreTests(unittest.TestCase):
         self.assertEqual(stored["review_status"], "reviewed")
         self.assertEqual(stored["decision"], "retry_preprocessed")
         self.assertTrue(stored["updated_at"])
+
+    def test_classifier_feedback_fields_are_saved(self) -> None:
+        self.import_source()
+        failure = list_failure_reviews(self.db_path)[0]
+        values, errors = validate_failure_submission(
+            {
+                "failure_reason": "classifier_false_positive",
+                "decision": "exclude_from_omr",
+                "corrected_page_type": "title",
+                "corrected_has_music": "false",
+                "should_send_to_omr": "false",
+                "classifier_error_type": "false_positive_music",
+            },
+            reviewed=True,
+        )
+        self.assertEqual(errors, [])
+        save_failure_review(
+            self.db_path,
+            int(failure["id"]),
+            values,
+            "Researcher",
+            "reviewed",
+        )
+        stored = get_failure_review(self.db_path, int(failure["id"]))
+        self.assertEqual(stored["corrected_page_type"], "title")
+        self.assertEqual(stored["corrected_has_music"], "false")
+        self.assertEqual(stored["should_send_to_omr"], "false")
+        self.assertEqual(
+            stored["classifier_error_type"], "false_positive_music"
+        )
+        self.assertEqual(
+            len(list_failure_reviews(self.db_path, "should_not_send")), 1
+        )
+        self.assertEqual(
+            len(
+                list_failure_reviews(
+                    self.db_path, "classifier_false_positive"
+                )
+            ),
+            1,
+        )
+        self.assertEqual(
+            len(list_failure_reviews(self.db_path, "non_music_pages")), 1
+        )
+        self.assertEqual(
+            len(list_failure_reviews(self.db_path, "real_omr_failures")), 0
+        )
+
+    def test_new_page_classification_failure_reasons_are_accepted(self) -> None:
+        for reason in (
+            "not_music_page",
+            "title_page",
+            "cover_page",
+            "text_page",
+            "blank_page",
+            "decorative_music_elements",
+            "classifier_false_positive",
+            "should_not_be_sent_to_omr",
+        ):
+            _, errors = validate_failure_submission(
+                {"failure_reason": reason, "decision": ""},
+                reviewed=False,
+            )
+            self.assertEqual(errors, [], reason)
 
     def test_reimport_does_not_overwrite_manual_classification(self) -> None:
         self.import_source()
@@ -223,6 +378,12 @@ class FailureReviewCoreTests(unittest.TestCase):
         self.assertIn("preprocessing_midi_path", rows[0])
         self.assertIn("preprocessing_runtime_seconds", rows[0])
         self.assertIn("preprocessing_error", rows[0])
+        self.assertIn("original_page_type", rows[0])
+        self.assertIn("corrected_page_type", rows[0])
+        self.assertIn("corrected_has_music", rows[0])
+        self.assertIn("should_send_to_omr", rows[0])
+        self.assertIn("classifier_error_type", rows[0])
+        self.assertIn("cnn_prediction", rows[0])
         self.assertNotIn("image_path", rows[0])
         self.assertNotIn("log_path", rows[0])
 
@@ -429,6 +590,10 @@ class FailureReviewHttpTests(unittest.TestCase):
                 "action": "draft",
                 "failure_reason": "small_interline",
                 "decision": "",
+                "corrected_page_type": "title",
+                "corrected_has_music": "false",
+                "should_send_to_omr": "false",
+                "classifier_error_type": "false_positive_music",
             },
             follow_redirects=False,
         )
@@ -436,6 +601,10 @@ class FailureReviewHttpTests(unittest.TestCase):
         self.assertEqual(
             get_failure_review(self.db_path, failure_id)["review_status"],
             "draft",
+        )
+        self.assertEqual(
+            get_failure_review(self.db_path, failure_id)["corrected_page_type"],
+            "title",
         )
 
         reviewed = self.client.post(

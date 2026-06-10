@@ -70,6 +70,67 @@
         </div>
       {% endif %}
       <form method="post" action="/failures/{{ failure.id }}">
+        <section class="classification-review">
+          <h2>Page classification review</h2>
+          <dl class="fallback-details">
+            <dt>Current page_type</dt>
+            <dd>{{ failure.page_type or 'unknown' }}</dd>
+            <dt>Current has_music_manual</dt>
+            <dd>{{ failure.has_music_manual or 'not available' }}</dd>
+            <dt>CNN prediction</dt>
+            <dd>{{ failure.cnn_prediction or 'not available' }}</dd>
+            <dt>Classical prediction</dt>
+            <dd>{{ failure.classical_prediction or 'not available' }}</dd>
+            <dt>Sample group</dt>
+            <dd>{{ failure.sample_group or 'not available' }}</dd>
+            <dt>Source reason</dt>
+            <dd>{{ failure.source_reason or 'not available' }}</dd>
+          </dl>
+          <label>Corrected page type
+            <select name="corrected_page_type">
+              <option value="">Not reviewed</option>
+              {% for page_type in corrected_page_types %}
+                <option value="{{ page_type }}"
+                  {{ 'selected' if values.corrected_page_type == page_type else '' }}>
+                  {{ page_type }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Corrected has_music
+            <select name="corrected_has_music">
+              <option value="">Not reviewed</option>
+              {% for value in tristate_values %}
+                <option value="{{ value }}"
+                  {{ 'selected' if values.corrected_has_music == value else '' }}>
+                  {{ value }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Should send to OMR
+            <select name="should_send_to_omr">
+              <option value="">Not reviewed</option>
+              {% for value in tristate_values %}
+                <option value="{{ value }}"
+                  {{ 'selected' if values.should_send_to_omr == value else '' }}>
+                  {{ value }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Classifier error type
+            <select name="classifier_error_type">
+              <option value="">Not reviewed</option>
+              {% for error_type in classifier_error_types %}
+                <option value="{{ error_type }}"
+                  {{ 'selected' if values.classifier_error_type == error_type else '' }}>
+                  {{ error_type }}
+                </option>
+              {% endfor %}
+            </select>
+          </label>
+        </section>
         <label>Причина сбоя
           <select name="failure_reason">
             {% for reason in failure_reasons %}

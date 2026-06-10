@@ -48,10 +48,13 @@ from review_app.export_failures import build_failure_export_csv
 from review_app.failure_schemas import validate_failure_submission
 from review_app.media_files import download_filename, find_review_result_file
 from review_app.models import (
+    CLASSIFIER_ERROR_TYPES,
+    CORRECTED_PAGE_TYPES,
     FAILURE_DECISIONS,
     FAILURE_REASONS,
     FAILURE_REVIEW_STATUSES,
     REVIEW_STATUSES,
+    TRISTATE_VALUES,
 )
 from review_app.schemas import resolve_review_metadata, validate_review_submission
 
@@ -209,6 +212,9 @@ def create_app(
                 "reviewer_name": reviewer["name"],
                 "failure_reasons": FAILURE_REASONS,
                 "failure_decisions": FAILURE_DECISIONS,
+                "corrected_page_types": CORRECTED_PAGE_TYPES,
+                "tristate_values": TRISTATE_VALUES,
+                "classifier_error_types": CLASSIFIER_ERROR_TYPES,
                 "previous_id": previous_id,
                 "next_id": next_id,
             },
@@ -481,11 +487,16 @@ def create_app(
     ) -> HTMLResponse:
         if not session_ready(request):
             return login_redirect(request)
-        selected_status = (
-            status
-            if status in {*FAILURE_REVIEW_STATUSES, "unknown_failure"}
-            else "all"
-        )
+        failure_filters = {
+            *FAILURE_REVIEW_STATUSES,
+            "unknown_failure",
+            "should_not_send",
+            "classifier_false_positive",
+            "non_music_pages",
+            "real_omr_failures",
+            "still_failed",
+        }
+        selected_status = status if status in failure_filters else "all"
         failures = list_failure_reviews(
             app.state.db_path,
             None if selected_status == "all" else selected_status,
@@ -504,6 +515,16 @@ def create_app(
                 for row in all_failures
             ),
         }
+        for filter_name in (
+            "should_not_send",
+            "classifier_false_positive",
+            "non_music_pages",
+            "real_omr_failures",
+            "still_failed",
+        ):
+            counts[filter_name] = len(
+                list_failure_reviews(app.state.db_path, filter_name)
+            )
         reviewer = current_reviewer(request)
         assert reviewer is not None
         return templates.TemplateResponse(

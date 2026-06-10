@@ -84,13 +84,41 @@ def _read_log_excerpt(path: Path | None, max_chars: int = 12000) -> str:
     return text[-max_chars:]
 
 
-def load_page_types(labels_path: Path | None) -> dict[tuple[str, int], str]:
+CLASSIFIER_METADATA_FIELDS = (
+    "page_type",
+    "has_music_manual",
+    "cnn_prediction",
+    "classical_prediction",
+    "sample_group",
+    "source_reason",
+)
+
+
+def load_page_metadata(
+    labels_path: Path | None,
+) -> dict[tuple[str, int], dict[str, str]]:
     if labels_path is None or not labels_path.is_file():
         return {}
     fields, rows = _read_csv(labels_path)
-    if not {"doc_id", "page_index", "page_type"}.issubset(fields):
+    if not {"doc_id", "page_index"}.issubset(fields):
         return {}
-    return {_page_key(row): str(row.get("page_type", "")).strip() for row in rows}
+    available = set(fields)
+    return {
+        _page_key(row): {
+            field: str(row.get(field, "")).strip()
+            for field in CLASSIFIER_METADATA_FIELDS
+            if field in available
+        }
+        for row in rows
+    }
+
+
+def load_page_types(labels_path: Path | None) -> dict[tuple[str, int], str]:
+    """Backward-compatible page type lookup."""
+    return {
+        key: metadata.get("page_type", "")
+        for key, metadata in load_page_metadata(labels_path).items()
+    }
 
 
 def load_fallback_results(
@@ -211,7 +239,7 @@ def discover_failure_items(
             "Use outputs/reports/omr_failure_report.csv rather than the "
             "document-level omr_pipeline_report.csv."
         )
-    page_types = load_page_types(labels_path)
+    page_metadata = load_page_metadata(labels_path)
     fallback_results = load_fallback_results(fallback_report)
     preprocessing_results = load_preprocessing_results(preprocessing_report)
     items = []
@@ -233,12 +261,21 @@ def discover_failure_items(
             or row.get("status")
             or "missing_mxl"
         ).strip()
+        metadata = page_metadata.get((doc_id, page_index), {})
+
+        def metadata_value(field: str) -> str:
+            return str(row.get(field, "")).strip() or metadata.get(field, "")
+
         items.append(
             {
                 "doc_id": doc_id,
                 "page_index": page_index,
-                "page_type": str(row.get("page_type", "")).strip()
-                or page_types.get((doc_id, page_index), ""),
+                "page_type": metadata_value("page_type"),
+                "has_music_manual": metadata_value("has_music_manual"),
+                "cnn_prediction": metadata_value("cnn_prediction"),
+                "classical_prediction": metadata_value("classical_prediction"),
+                "sample_group": metadata_value("sample_group"),
+                "source_reason": metadata_value("source_reason"),
                 "image_path": _relative_to_project(image_path, project_root),
                 "omr_dir": _relative_to_project(page_dir, project_root),
                 "log_path": (

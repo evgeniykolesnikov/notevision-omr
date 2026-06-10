@@ -8,7 +8,7 @@ from contextlib import closing
 from pathlib import Path
 from typing import Iterable
 
-from review_app.models import REVIEW_FIELDS
+from review_app.models import REAL_OMR_FAILURE_REASONS, REVIEW_FIELDS
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parent / "review_app.db"
 LOCAL_REVIEWER_NAME = "local"
@@ -84,6 +84,11 @@ CREATE TABLE IF NOT EXISTS failure_reviews (
     doc_id TEXT NOT NULL,
     page_index INTEGER NOT NULL,
     page_type TEXT NOT NULL DEFAULT '',
+    has_music_manual TEXT NOT NULL DEFAULT '',
+    cnn_prediction TEXT NOT NULL DEFAULT '',
+    classical_prediction TEXT NOT NULL DEFAULT '',
+    sample_group TEXT NOT NULL DEFAULT '',
+    source_reason TEXT NOT NULL DEFAULT '',
     image_path TEXT NOT NULL,
     omr_dir TEXT NOT NULL,
     log_path TEXT NOT NULL DEFAULT '',
@@ -93,6 +98,10 @@ CREATE TABLE IF NOT EXISTS failure_reviews (
     decision TEXT NOT NULL DEFAULT '',
     audiveris_log_excerpt TEXT NOT NULL DEFAULT '',
     expert_comment TEXT NOT NULL DEFAULT '',
+    corrected_page_type TEXT NOT NULL DEFAULT '',
+    corrected_has_music TEXT NOT NULL DEFAULT '',
+    should_send_to_omr TEXT NOT NULL DEFAULT '',
+    classifier_error_type TEXT NOT NULL DEFAULT '',
     reviewer TEXT NOT NULL DEFAULT '',
     review_status TEXT NOT NULL DEFAULT 'draft'
         CHECK(review_status IN ('draft', 'reviewed')),
@@ -138,6 +147,15 @@ ITEM_MIGRATION_COLUMNS = {
 }
 
 FAILURE_MIGRATION_COLUMNS = {
+    "has_music_manual": "TEXT NOT NULL DEFAULT ''",
+    "cnn_prediction": "TEXT NOT NULL DEFAULT ''",
+    "classical_prediction": "TEXT NOT NULL DEFAULT ''",
+    "sample_group": "TEXT NOT NULL DEFAULT ''",
+    "source_reason": "TEXT NOT NULL DEFAULT ''",
+    "corrected_page_type": "TEXT NOT NULL DEFAULT ''",
+    "corrected_has_music": "TEXT NOT NULL DEFAULT ''",
+    "should_send_to_omr": "TEXT NOT NULL DEFAULT ''",
+    "classifier_error_type": "TEXT NOT NULL DEFAULT ''",
     "fallback_400_status": "TEXT NOT NULL DEFAULT ''",
     "fallback_400_mxl_path": "TEXT NOT NULL DEFAULT ''",
     "fallback_400_midi_path": "TEXT NOT NULL DEFAULT ''",
@@ -638,7 +656,9 @@ def import_failure_items(
             connection.execute(
                 """
                 INSERT INTO failure_reviews (
-                    doc_id, page_index, page_type, image_path, omr_dir,
+                    doc_id, page_index, page_type, has_music_manual,
+                    cnn_prediction, classical_prediction, sample_group,
+                    source_reason, image_path, omr_dir,
                     log_path, failure_status, audiveris_log_excerpt,
                     fallback_400_status, fallback_400_mxl_path,
                     fallback_400_midi_path, fallback_400_runtime_seconds,
@@ -646,9 +666,17 @@ def import_failure_items(
                     preprocessing_best_variant, preprocessing_mxl_path,
                     preprocessing_midi_path, preprocessing_runtime_seconds,
                     preprocessing_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?
+                )
                 ON CONFLICT(doc_id, page_index) DO UPDATE SET
                     page_type = excluded.page_type,
+                    has_music_manual = excluded.has_music_manual,
+                    cnn_prediction = excluded.cnn_prediction,
+                    classical_prediction = excluded.classical_prediction,
+                    sample_group = excluded.sample_group,
+                    source_reason = excluded.source_reason,
                     image_path = excluded.image_path,
                     omr_dir = excluded.omr_dir,
                     log_path = excluded.log_path,
@@ -718,6 +746,11 @@ def import_failure_items(
                     item["doc_id"],
                     item["page_index"],
                     item.get("page_type", ""),
+                    item.get("has_music_manual", ""),
+                    item.get("cnn_prediction", ""),
+                    item.get("classical_prediction", ""),
+                    item.get("sample_group", ""),
+                    item.get("source_reason", ""),
                     item["image_path"],
                     item["omr_dir"],
                     item.get("log_path", ""),
@@ -754,6 +787,32 @@ def list_failure_reviews(
     elif status in {"draft", "reviewed"}:
         query += " WHERE review_status = ?"
         parameters.append(status)
+    elif status == "should_not_send":
+        query += " WHERE should_send_to_omr = 'false'"
+    elif status == "classifier_false_positive":
+        query += """
+            WHERE classifier_error_type = 'false_positive_music'
+               OR failure_reason = 'classifier_false_positive'
+        """
+    elif status == "non_music_pages":
+        query += """
+            WHERE COALESCE(NULLIF(corrected_page_type, ''), page_type)
+                  IN ('title', 'cover', 'text', 'blank')
+        """
+    elif status == "real_omr_failures":
+        placeholders = ", ".join("?" for _ in REAL_OMR_FAILURE_REASONS)
+        query += (
+            f" WHERE failure_reason IN ({placeholders})"
+            " AND should_send_to_omr != 'false'"
+        )
+        parameters.extend(REAL_OMR_FAILURE_REASONS)
+    elif status == "still_failed":
+        query += """
+            WHERE fallback_400_status = 'still_failed'
+              AND preprocessing_fallback_status IN (
+                  '', 'still_failed', 'preprocessing_failed', 'failed'
+              )
+        """
     query += " ORDER BY doc_id, page_index"
     with closing(connect(db_path)) as connection:
         rows = connection.execute(query, parameters).fetchall()
@@ -793,6 +852,10 @@ def save_failure_review(
                 decision = ?,
                 audiveris_log_excerpt = ?,
                 expert_comment = ?,
+                corrected_page_type = ?,
+                corrected_has_music = ?,
+                should_send_to_omr = ?,
+                classifier_error_type = ?,
                 reviewer = ?,
                 review_status = ?,
                 updated_at = CURRENT_TIMESTAMP
@@ -804,6 +867,10 @@ def save_failure_review(
                 values["decision"],
                 values["audiveris_log_excerpt"],
                 values["expert_comment"],
+                values["corrected_page_type"],
+                values["corrected_has_music"],
+                values["should_send_to_omr"],
+                values["classifier_error_type"],
                 reviewer,
                 status,
                 failure_id,
