@@ -362,6 +362,32 @@ technical success rate по ней нужно показывать отдель�
 OMR adapter не отбрасывает включённые disagreement/false-positive страницы по
 их ручному `page_type`.
 
+Результат завершённого эксперимента:
+
+- primary 300 DPI: MXL `240/300` (80.00%), MIDI `239/300` (79.67%);
+- 400 DPI fallback: восстановлено 16 из 60 primary failures;
+- preprocessing fallback: восстановлена 1 из оставшихся 44 страниц;
+- combined technical availability: MXL `257/300` (85.67%), MIDI `256/300`
+  (85.33%).
+
+Подробная интерпретация приведена в
+[`docs/thesis/omr_eval_300_results.md`](docs/thesis/omr_eval_300_results.md).
+Показатели отражают наличие файлов, а не музыкальную правильность содержимого.
+
+Primary report для конкретных каталогов формируется так:
+
+```powershell
+python scripts/evaluate_omr_pipeline.py `
+  --sample data/labels/omr_eval_sample_300_thesis.csv `
+  --omr-dir outputs/omr_eval_300 `
+  --midi-dir outputs/midi_eval_300 `
+  --out outputs/reports/omr_eval_300_pipeline_report.csv `
+  --markdown-out outputs/reports/omr_eval_300_primary.md
+```
+
+Generated Markdown сохраняет фактические значения `--sample`, `--omr-dir`,
+`--midi-dir` и `--out`, использованные при запуске.
+
 ## Run OMR from candidates
 
 Рекомендуемый процесс: сначала повторно извлечь OMR-кандидатов из исходных PDF

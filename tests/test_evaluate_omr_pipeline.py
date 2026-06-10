@@ -88,6 +88,21 @@ class EvaluateOmrPipelineTests(unittest.TestCase):
         self.assertIn("missing_mxl", report)
         self.assertIn("missing_midi", report)
 
+    def test_markdown_uses_actual_input_paths(self) -> None:
+        report = build_omr_evaluation_markdown(
+            [],
+            [],
+            sample_path=Path("data/labels/custom_sample.csv"),
+            omr_dir=Path("outputs/custom_omr"),
+            midi_dir=Path("outputs/custom_midi"),
+            report_path=Path("outputs/reports/custom_report.csv"),
+        )
+
+        self.assertIn(f"`{Path('data/labels/custom_sample.csv')}`", report)
+        self.assertIn(f"`{Path('outputs/custom_omr')}`", report)
+        self.assertIn(f"`{Path('outputs/custom_midi')}`", report)
+        self.assertIn(f"`{Path('outputs/reports/custom_report.csv')}`", report)
+
 
 if __name__ == "__main__":
     unittest.main()

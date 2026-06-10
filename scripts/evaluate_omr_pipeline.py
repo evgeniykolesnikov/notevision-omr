@@ -167,6 +167,11 @@ def write_omr_pipeline_report(
 def build_omr_evaluation_markdown(
     inspected_pages: list[dict[str, object]],
     document_rows: list[dict[str, object]],
+    *,
+    sample_path: Path = Path("data/labels/omr_eval_sample_thesis.csv"),
+    omr_dir: Path = Path("outputs/omr_300dpi"),
+    midi_dir: Path = Path("outputs/midi"),
+    report_path: Path = Path("outputs/reports/omr_pipeline_report.csv"),
 ) -> str:
     """Generate a factual thesis report from current MXL/MIDI artifacts."""
     total = len(inspected_pages)
@@ -202,14 +207,13 @@ def build_omr_evaluation_markdown(
     return f"""# Оценка OMR pipeline
 
 Документ сформирован автоматически по выборке
-`data/labels/omr_eval_sample_thesis.csv` и текущему состоянию каталогов
-`outputs/omr_300dpi` и `outputs/midi`.
+`{sample_path}` и текущему состоянию каталогов `{omr_dir}` и `{midi_dir}`.
 
 ## Размер OMR-выборки
 
 В оценку включено **{total} страниц** из **{len(document_rows)} документов**.
 Для каждой страницы проверяется наличие хотя бы одного MXL-файла и
-канонического MIDI-файла `outputs/midi/<doc_id>/page_XXX.mid`.
+канонического MIDI-файла `{midi_dir}/<doc_id>/page_XXX.mid`.
 
 ## Результаты
 
@@ -234,7 +238,7 @@ def build_omr_evaluation_markdown(
 
 Документы упорядочены по числу страниц выборки, для которых ещё не создан
 MIDI. Полный документный срез хранится в
-`outputs/reports/omr_pipeline_report.csv`.
+`{report_path}`.
 
 ## Типичные причины ошибок
 
@@ -267,11 +271,23 @@ def write_omr_evaluation_markdown(
     output_path: Path,
     inspected_pages: list[dict[str, object]],
     document_rows: list[dict[str, object]],
+    *,
+    sample_path: Path = Path("data/labels/omr_eval_sample_thesis.csv"),
+    omr_dir: Path = Path("outputs/omr_300dpi"),
+    midi_dir: Path = Path("outputs/midi"),
+    report_path: Path = Path("outputs/reports/omr_pipeline_report.csv"),
 ) -> None:
     """Save the generated thesis OMR evaluation chapter."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(
-        build_omr_evaluation_markdown(inspected_pages, document_rows),
+        build_omr_evaluation_markdown(
+            inspected_pages,
+            document_rows,
+            sample_path=sample_path,
+            omr_dir=omr_dir,
+            midi_dir=midi_dir,
+            report_path=report_path,
+        ),
         encoding="utf-8",
     )
 
@@ -319,6 +335,10 @@ def main() -> None:
             args.markdown_out,
             inspected_pages,
             document_rows,
+            sample_path=args.sample,
+            omr_dir=args.omr_dir,
+            midi_dir=args.midi_dir,
+            report_path=args.out,
         )
     except (FileNotFoundError, ValueError, OSError, csv.Error) as error:
         raise SystemExit(f"Error: {error}") from error
