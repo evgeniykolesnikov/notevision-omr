@@ -388,6 +388,41 @@ python scripts/evaluate_omr_pipeline.py `
 Generated Markdown сохраняет фактические значения `--sample`, `--omr-dir`,
 `--midi-dir` и `--out`, использованные при запуске.
 
+### One-command OMR evaluation pipeline
+
+Для MVP полный цикл primary OMR, MIDI conversion, 400 DPI fallback,
+preprocessing fallback и combined evaluation запускается одной командой:
+
+```powershell
+python scripts/run_omr_eval_pipeline.py `
+  --sample data/labels/omr_eval_sample_300_thesis.csv `
+  --pages-dir outputs/pages `
+  --raw-dir data/raw `
+  --out-root outputs/omr_eval_300_pipeline `
+  --reports-dir outputs/reports `
+  --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe" `
+  --resume
+```
+
+Для короткой технической проверки можно добавить `--limit 3`. При `--resume`
+уже существующие 300 DPI страницы, MXL и MIDI не создаются повторно.
+
+Артефакты каждого этапа сохраняются отдельно внутри `--out-root`, а в
+`--reports-dir` формируются:
+
+- primary document report;
+- primary page failures;
+- 400 DPI fallback report;
+- preprocessing fallback report;
+- final combined page-level CSV;
+- итоговый Markdown summary.
+
+Отдельные команды `run_audiveris_omr.py`, `convert_mxl_to_midi.py`,
+`run_omr_fallback_dpi.py`, `run_omr_preprocessing_fallback.py` и
+`evaluate_omr_pipeline.py` остаются доступными для изолированных
+исследовательских запусков. Рекомендуемый MVP workflow использует orchestrator.
+Подробности: [`docs/thesis/omr_pipeline_orchestration.md`](docs/thesis/omr_pipeline_orchestration.md).
+
 ## Run OMR from candidates
 
 Рекомендуемый процесс: сначала повторно извлечь OMR-кандидатов из исходных PDF
