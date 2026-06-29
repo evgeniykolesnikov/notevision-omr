@@ -20,6 +20,7 @@ from review_app.auth import (
     verify_auth_token,
     verify_password,
 )
+from review_app.config import load_review_app_password
 from review_app.database import (
     DEFAULT_DB_PATH,
     adjacent_failure_ids,
@@ -89,10 +90,9 @@ def create_app(
         package_dir
         or os.getenv("REVIEW_PACKAGE_DIR", str(DEFAULT_PACKAGE_DIR))
     ).resolve()
-    selected_password = (
-        password
-        if password is not None
-        else os.getenv("REVIEW_APP_PASSWORD", "")
+    selected_password, password_source = load_review_app_password(
+        selected_project_root,
+        password,
     )
     init_db(selected_db)
 
@@ -101,6 +101,7 @@ def create_app(
     app.state.package_dir = selected_package
     app.state.project_root = selected_project_root
     app.state.password = selected_password
+    app.state.password_source = password_source
     templates = Jinja2Templates(directory=APP_DIR / "templates")
     app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 
@@ -238,6 +239,9 @@ def create_app(
                 "error": "",
                 "next": safe_next,
                 "password_configured": bool(app.state.password),
+                "using_default_password": (
+                    app.state.password_source == "default"
+                ),
                 "reviewer_name": "",
             },
         )
@@ -256,6 +260,7 @@ def create_app(
                     "error": "REVIEW_APP_PASSWORD не настроен.",
                     "next": next_path,
                     "password_configured": False,
+                    "using_default_password": False,
                     "reviewer_name": form.get("reviewer_name", ""),
                 },
                 status_code=503,
@@ -268,6 +273,9 @@ def create_app(
                     "error": "Неверный пароль.",
                     "next": next_path,
                     "password_configured": True,
+                    "using_default_password": (
+                        app.state.password_source == "default"
+                    ),
                     "reviewer_name": form.get("reviewer_name", ""),
                 },
                 status_code=401,
@@ -286,6 +294,9 @@ def create_app(
                     "error": "Укажите имя эксперта.",
                     "next": next_path,
                     "password_configured": True,
+                    "using_default_password": (
+                        app.state.password_source == "default"
+                    ),
                     "reviewer_name": reviewer_name,
                 },
                 status_code=422,

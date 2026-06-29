@@ -10,8 +10,8 @@
   <main class="login-card">
     <h1>Экспертная проверка OMR</h1>
     <p>
-      Введите общий пароль и своё имя. Ваш прогресс будет храниться отдельно
-      от оценок других экспертов.
+      Введите имя эксперта и общий пароль. Прогресс ручной проверки будет
+      сохранён отдельно для указанного эксперта.
     </p>
     {% if error %}<div class="alert error">{{ error }}</div>{% endif %}
     {% if not password_configured %}
@@ -19,16 +19,21 @@
         Приложение заблокировано: переменная REVIEW_APP_PASSWORD не задана.
       </div>
     {% endif %}
+    {% if using_default_password %}
+      <div class="alert warning">
+        Используется дефолтный локальный пароль. Для реального использования задайте REVIEW_APP_PASSWORD.
+      </div>
+    {% endif %}
     <form method="post" action="/login">
       <input type="hidden" name="next" value="{{ next }}">
       <label>
-        Пароль
-        <input type="password" name="password" required autofocus>
+        Логин / имя эксперта
+        <input name="reviewer_name" value="{{ reviewer_name }}" required
+               autocomplete="name" autofocus>
       </label>
       <label>
-        Имя эксперта
-        <input name="reviewer_name" value="{{ reviewer_name }}" required
-               autocomplete="name">
+        Пароль
+        <input type="password" name="password" required>
       </label>
       <button type="submit" class="primary">Войти</button>
     </form>

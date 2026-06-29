@@ -8,6 +8,7 @@ import unittest
 from contextlib import closing
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 from review_app.auth import build_reviewer_session, read_reviewer_session
 from review_app.database import (
@@ -674,6 +675,42 @@ class ReviewAppHttpTests(unittest.TestCase):
             follow_redirects=False,
         )
         self.assertEqual(response.status_code, 303)
+
+    def test_login_page_orders_reviewer_before_password(self) -> None:
+        page = self.client.get("/login")
+        self.assertEqual(page.status_code, 200)
+        reviewer_position = page.text.index('name="reviewer_name"')
+        password_position = page.text.index('name="password"')
+        self.assertLess(reviewer_position, password_position)
+        self.assertIn('name="reviewer_name"', page.text)
+        self.assertIn("autofocus", page.text)
+        self.assertIn("Логин / имя эксперта", page.text)
+
+    def test_login_page_warns_when_default_password_is_used(self) -> None:
+        from fastapi.testclient import TestClient
+        from review_app.main import create_app
+
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            package_dir = root / "package"
+            create_package(package_dir, item_count=1)
+            with patch.dict("os.environ", {}, clear=True):
+                client = TestClient(
+                    create_app(
+                        db_path=root / "review.db",
+                        package_dir=package_dir,
+                        project_root=root,
+                    )
+                )
+            try:
+                page = client.get("/login")
+                self.assertEqual(page.status_code, 200)
+                self.assertIn(
+                    "Используется дефолтный локальный пароль",
+                    page.text,
+                )
+            finally:
+                client.close()
 
     def test_document_dashboard_routes(self) -> None:
         self.login()
