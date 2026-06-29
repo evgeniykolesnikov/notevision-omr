@@ -821,6 +821,29 @@ all fallbacks. `/export/failure_review.csv` includes these corrections and can
 be used as a reviewed hard-negative dataset for page-classifier retraining.
 The original `page_type` remains separate from the corrected value.
 
+## Experimental pre-OMR filter
+
+The pre-OMR filter is an experimental routing step before Audiveris. It reads a
+candidate CSV and page PNG files, extracts lightweight visual features, and
+marks obvious non-music pages as `send_to_omr=false`.
+
+```powershell
+python scripts/evaluate_pre_omr_filter.py `
+  --candidates data/labels/omr_eval_sample_300_thesis.csv `
+  --pages-dir outputs/pages `
+  --failure-review outputs/reports/failure_review.csv `
+  --out outputs/reports/pre_omr_filter_eval.md `
+  --predictions-out outputs/reports/pre_omr_filter_predictions.csv
+```
+
+The report checks the filter against the manual failure-review export:
+
+- how many `false_positive_music` pages would have been filtered before OMR;
+- how many real `music` / `mixed` pages would have been wrongly excluded.
+
+This filter is intentionally conservative and is not part of the main OMR
+metric unless explicitly enabled in an experiment.
+
 ## OMR fallback at 400 DPI
 
 400 DPI используется только как fallback-эксперимент для страниц, на которых
