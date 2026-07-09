@@ -1,969 +1,174 @@
-# notevision-omr
+# NoteVision OMR - pipeline for scanned sheet music documents
 
-Система анализа сканированных нотных документов.
-
-## MVP direction
-
-MVP NoteVision OMR развивается как воспроизводимый human-in-the-loop
-pipeline для библиотеки:
+NoteVision OMR is an engineering MVP for processing scanned sheet music documents from local PDF/MRC collections. The main pipeline is:
 
 ```text
-PDF/MRC → pages → music-page detector → Audiveris → MXL/MIDI
-→ music features → expert review → reports
+PDF/MRC -> pages -> routing/page classification -> pre-OMR filter
+-> Audiveris baseline OMR -> MXL/MusicXML -> MIDI
+-> music features -> reports -> review_app -> failure/expert review
 ```
 
-Текущая версия уже поддерживает обработку корпуса, основной и fallback OMR,
-экспертную web-проверку и экспорт метрик. Следующий этап — единый dashboard
-документов, извлечение музыкально-теоретических характеристик, обучаемый
-page classifier и расширенная стратифицированная OMR-оценка.
+The project focuses on reproducible local processing, artifact tracking and human-in-the-loop review. It does not claim note-level musical correctness without expert validation.
 
-Подробное описание ролей, сценариев, статусов и границ MVP приведено в
-[`docs/thesis/mvp_architecture.md`](docs/thesis/mvp_architecture.md).
+## Main Features
 
-## MVP document dashboard
+- PDF page extraction and local document inventory.
+- MARC/MRC metadata parsing.
+- Page validation and `page_type` routing.
+- Pre-OMR filtering to avoid sending obvious non-music pages to OMR.
+- Audiveris integration as the baseline OMR engine.
+- MXL/MusicXML and MIDI artifact handling.
+- Music feature extraction from existing MXL/MusicXML.
+- CSV/Markdown reports for corpus, classifier, OMR and failure analysis.
+- `review_app` for manual review, failure review and expert review workflows.
 
-Защищённый `review_app` содержит прикладные страницы MVP:
+## Important Metrics
 
-- `/documents` — inventory и агрегированные статусы документов;
-- `/documents/<doc_id>` — metadata, страницы, labels, OMR/fallback и
-  музыкальные признаки;
-- `/inbox` — обзор локальной входящей папки и неполных PDF/MRC-пар;
-- `/reports` — ссылки на существующие Markdown/CSV-отчёты.
+These are the final VKR metrics and must be treated as technical artifact availability, not musical correctness:
 
-Dashboard работает в read-only режиме: он не запускает Audiveris и не читает
-PDF внутри HTTP-запроса. Отсутствующие optional reports или artifacts
-отображаются как пустые/неизвестные значения и не приводят к ошибке страницы.
+- Corpus: 52 documents.
+- Validated pages: 2513.
+- Page types: music 2214, mixed 24, title 78, text 69, blank 102, unknown 26.
+- OMR-300 diagnostic subset: 300 pages from 39 documents.
+- Primary MXL: 240/300 = 80.00%.
+- Primary MIDI: 239/300 = 79.67%.
+- Final MXL technical success: 257/300 = 85.67%.
+- Final MIDI technical success: 256/300 = 85.33%.
+- Final failures: 43 pages.
+- Failure review: 23 routing/false-positive music cases and 20 real music/mixed OMR cases.
+- Pre-OMR filter: 300 candidates, 295 sent to OMR, 5 filtered out, 0 wrongly filtered music/mixed.
 
-### Page detail and MIDI/audio preview
+`technical success != musical correctness`: MXL/MIDI presence means that a structured/playback artifact was created. It does not prove that notes, rhythm, voices, measures or playback are musically correct.
 
-Каждая карточка в `/documents/<doc_id>` открывает защищённую страницу
-`/documents/<doc_id>/pages/<page_index>`. На ней собраны:
+## Main Pipeline vs Experimental Work
 
-- крупный PNG-скан страницы;
-- `page_type`, `has_music`, источник разметки и OMR/fallback-статусы;
-- безопасные ссылки на MXL и MIDI без раскрытия локальных путей;
-- MP3/WAV/OGG audio preview и отдельные дорожки, если они есть в экспертном
-  пакете;
-- музыкальные характеристики из `music_features.csv`;
-- переход к экспертной проверке, если страница включена в `review_items`.
+Main pipeline:
 
-MIDI не передаётся браузеру как потоковое аудио. Если audio preview отсутствует,
-его можно скачать как MIDI и открыть в нотном редакторе или DAW.
+- Audiveris baseline OMR.
+- MXL/MusicXML and MIDI artifact creation.
+- Music feature extraction from MXL/MusicXML.
+- Reports and review application.
+- Failure review and expert review preparation.
 
-Запуск:
+Experimental / backup analyses:
 
-Пароль для `review_app` читается в таком порядке:
+- Pipeline timing benchmarks.
+- Audiveris timing sample.
+- Safe parallel OMR batch runner.
+- Music features coverage analysis.
+- Toy neural OMR prototype.
+- Neural vs Audiveris runtime comparison.
 
-1. переменная окружения `REVIEW_APP_PASSWORD`;
-2. файл `.env` в корне проекта;
-3. локальный пароль разработки `notevision`.
+The experimental neural OMR prototype predicts simplified token sequences and does not replace Audiveris.
 
-Для реального использования задайте собственный пароль и не коммитьте `.env`.
-Пример настроек лежит в `.env.example`:
+## Repository Structure
 
-```env
-REVIEW_APP_PASSWORD=notevision
+```text
+scripts/                         command-line pipeline and analysis scripts
+src/notevision/                  main Python package
+src/notevision/omr/              Audiveris, OMR and related helpers
+src/notevision/experimental/     experimental research prototypes
+review_app/                      local web interface for review
+tests/                           unit tests
+docs/thesis/local_vkr/           VKR notes, defense materials and local reports
+outputs/                         generated artifacts and reports, not for Git
 ```
+
+## Setup
 
 ```powershell
-$env:REVIEW_APP_PASSWORD = "Надёжный-пароль"
-uvicorn review_app.main:app --host 127.0.0.1 --port 8000
-```
-
-На странице входа эксперт сначала вводит `Логин / имя эксперта`, затем общий
-пароль. Прогресс проверки сохраняется отдельно для каждого имени эксперта.
-
-## Цель
-
-`PDF/MRC -> страницы -> выявление нотных страниц -> OMR -> MusicXML/MIDI -> музыкальные признаки`
-
-## Структура проекта
-
-```text
-data/           исходные данные, разметка и промежуточные наборы
-docs/           постановка задачи, требования, план данных и архитектура
-notebooks/      исследовательские ноутбуки и эксперименты
-src/notevision/ основной Python-пакет
-scripts/        команды запуска этапов конвейера
-outputs/        сгенерированные страницы, прогнозы, OMR и отчёты
-tests/          автоматические тесты
-```
-
-Модули пакета отвечают за извлечение страниц из PDF, разбор MRC, подготовку
-изображений, классификацию страниц, OMR, экспорт MusicXML/MIDI, вычисление
-метрик и интерфейс Streamlit.
-
-## Установка
-
-Требуется Python 3.10 или новее.
-
-```bash
 python -m venv .venv
-```
-
-Активация окружения в PowerShell:
-
-```powershell
 .\.venv\Scripts\Activate.ps1
-```
-
-Установка зависимостей:
-
-```bash
 python -m pip install -r requirements.txt
 ```
 
-При необходимости скопируйте `.env.example` в `.env` и измените пути.
+Some optional scripts require external tools such as Audiveris, MuseScore/music21 or local CUDA-enabled PyTorch. Audiveris can be passed explicitly:
 
-## Import downloaded RSL files
-
-Скачанные PDF и MRC можно складывать без переименования в общую папку
-`data/inbox/`. Скрипт сопоставит файлы по идентификатору РГБ, создаст папки
-`data/raw/<doc_id>/`, скопирует туда исходные файлы и добавит `source.txt`:
-
-```bash
-python scripts/organize_raw_files.py --inbox data/inbox --raw-dir data/raw
+```powershell
+python scripts/run_audiveris_omr.py --help
+python scripts/run_audiveris_omr.py --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe" --help
 ```
 
-По умолчанию файлы копируются. Флаг `--move` перемещает их, а `--overwrite`
-разрешает замену уже существующих файлов. Отчёт сохраняется в
-`outputs/reports/raw_import_report.csv`.
+## Typical Commands
 
-После импорта остальные этапы pipeline запускаются для папки
-`data/raw/<doc_id>/`, например через аргумент `--document-dir`.
+Parse MRC metadata:
 
-## Extract PDF pages
-
-Исходные PDF хранятся локально в `data/raw/` и не коммитятся в репозиторий.
-Рекомендуемый вариант: передать папку документа. Скрипт сам найдёт единственный
-PDF внутри неё, поэтому переименовывать файл в `document.pdf` не требуется:
-
-```bash
-python scripts/extract_pages.py --document-dir data/raw/rsl01004470876 --out outputs/pages/rsl01004470876 --dpi 200
-```
-
-Также можно явно передать путь к PDF:
-
-```bash
-python scripts/extract_pages.py --pdf data/raw/rsl01004470876/rsl01004470876.pdf --out outputs/pages/rsl01004470876 --doc-id rsl01004470876 --dpi 200
-```
-
-Изображения будут названы `page_001.png`, `page_002.png` и далее.
-
-## Parse MRC metadata
-
-MRC-файл хранится локально в папке `data/raw/<doc_id>/` рядом с PDF и не
-коммитится в репозиторий. Чтобы найти единственный MRC в папке документа,
-распарсить метаданные и сохранить JSON, выполните:
-
-```bash
-python scripts/parse_mrc.py --document-dir data/raw/rsl01004470876 --out outputs/reports/rsl01004470876_metadata.json
-```
-
-Для обработки всех папок документов и создания общего CSV:
-
-```bash
+```powershell
+python scripts/parse_mrc.py --document-dir data/raw/<doc_id> --out outputs/reports/<doc_id>_metadata.json
 python scripts/parse_mrc_batch.py --raw-dir data/raw --out outputs/reports/all_metadata.csv
 ```
 
-Ошибки отдельных документов сохраняются в
-`outputs/reports/mrc_parse_errors.csv` и не останавливают пакетную обработку.
-
-## Detect music pages
-
-Baseline-классификатор выделяет горизонтальные линии на изображениях страниц,
-оценивает группы нотных станов и сохраняет rule-based прогнозы в CSV:
-
-```bash
-python scripts/run_pipeline.py --manifest outputs/pages/rsl01004470876/manifest.csv --out outputs/predictions/rsl01004470876_page_predictions.csv
-```
-
-## Train page classifier
-
-Обучаемый classifier является исследовательским расширением rule-based
-detector. По умолчанию для обучения и оценки используются только строки
-`manual_previous` и `manual_thesis`; `template_prediction` не считается
-ground truth. Train/validation split выполняется по `doc_id`, поэтому страницы
-одного документа не попадают в обе части.
-
-Classical baseline извлекает brightness, contrast, black pixel ratio, edge
-density, горизонтальные/staff-like линии и connected components, затем
-сравнивает Logistic Regression и Random Forest:
+Extract PDF pages:
 
 ```powershell
-python scripts/train_page_classifier.py `
-  --labels data/labels/pages_validated_thesis.csv `
-  --pages-dir outputs/pages `
-  --target has_music `
-  --model classical `
-  --out-dir outputs/reports/page_classifier
+python scripts/extract_pages.py --document-dir data/raw/<doc_id> --out outputs/pages/<doc_id> --dpi 200
 ```
 
-CNN baseline использует MobileNetV3 Small. Pretrained weights загружаются,
-если доступны; иначе модель создаётся без них. Аугментации ограничены небольшим
-поворотом, brightness/contrast, лёгким blur и resize/crop. Flip и агрессивная
-perspective transformation не применяются.
-
-Фактические результаты Random Forest, MobileNetV3, multiclass `page_type` и
-inference по 2513 страницам описаны в
-[`docs/thesis/page_classifier_experiments.md`](docs/thesis/page_classifier_experiments.md).
-На текущем validation split rule-based detector сохраняется как основной
-компонент MVP, а расхождения ML-моделей используются для ручного контроля.
+Run OMR evaluation pipeline:
 
 ```powershell
-python scripts/train_page_classifier.py `
-  --labels data/labels/pages_validated_thesis.csv `
-  --pages-dir outputs/pages `
-  --target has_music `
-  --model cnn `
-  --epochs 30 `
-  --batch-size 16 `
-  --out-dir outputs/reports/page_classifier
+python scripts/run_omr_eval_pipeline.py --help
 ```
 
-Возможен также target `page_type`. Отчёты сохраняются в выбранном `out-dir`,
-а модели — в `models/page_classifier.joblib` или `models/page_classifier.pt`.
-PyTorch/torchvision нужны только для CNN.
-
-Применение сохранённой модели:
+Convert MXL to MIDI:
 
 ```powershell
-python scripts/predict_page_classifier.py `
-  --model models/page_classifier.pt `
-  --pages-dir outputs/pages `
-  --out outputs/reports/page_classifier_predictions.csv
+python scripts/convert_mxl_to_midi.py --input outputs/omr_eval_300/<doc_id>/page_001/page_001.mxl --out outputs/midi_eval_300/<doc_id>/page_001.mid
 ```
 
-Отсутствующая или повреждённая страница записывается в predictions CSV со
-статусом `failed` и не останавливает весь batch.
-
-## Evaluate music page detection
-
-Для сравнения прогнозов с ручной разметкой и расчёта accuracy, precision,
-recall, F1 и confusion matrix выполните:
-
-```bash
-python scripts/evaluate.py --labels data/labels/pages.csv --predictions outputs/predictions/rsl01004470876_page_predictions.csv --out outputs/reports/rsl01004470876_metrics.json
-```
-
-Если разметка содержит колонку `page_type`, JSON также включает краткую
-сводку ошибок для каждого типа страниц.
-
-## Evaluate batch predictions
-
-Для оценки валидированной разметки по всем файлам прогнозов:
-
-```bash
-python scripts/evaluate_batch.py --labels data/labels/pages_validated.csv --predictions-dir outputs/predictions --out outputs/reports/validated_metrics.json
-```
-
-JSON содержит общие метрики, confusion matrix и метрики по каждому `doc_id`.
-При наличии `page_type` также добавляется сводка ошибок по типам страниц.
-Лишние строки прогнозов игнорируются, но для каждой размеченной страницы
-предсказание обязательно.
-
-## Batch processing
-
-Для обработки всех папок `data/raw/<doc_id>/` одной командой выполните:
-
-```bash
-python scripts/batch_run_pipeline.py --raw-dir data/raw --outputs-dir outputs --dpi 200
-```
-
-Batch pipeline извлекает страницы, сохраняет MRC-метаданные при их наличии,
-определяет страницы с нотной записью и формирует общий отчёт
-`outputs/reports/batch_pipeline_report.csv`. Все прогнозы страниц объединяются
-в `outputs/reports/all_page_predictions.csv`. Ошибка одного документа не
-останавливает обработку остальных.
-
-## Build labels template
-
-Для создания CSV-шаблона ручной разметки на основе общего файла прогнозов:
-
-```bash
-python scripts/build_labels_template.py --predictions outputs/reports/all_page_predictions.csv --out data/labels/pages_template.csv
-```
-
-Значения `has_music` и `page_type` предварительно заполняются из baseline-
-прогноза. Флаг `--sample-only N` оставляет первые N страниц каждого документа
-для быстрой проверки, а `--overwrite` разрешает заменить существующий шаблон.
-
-## Manual label review
-
-Для создания локальной HTML-галереи валидированной разметки:
-
-```bash
-python scripts/build_review_gallery.py --labels data/labels/pages_validated.csv --out outputs/reports/page_review_gallery.html
-```
-
-Галерею можно отфильтровать по документу через `--doc-id`, оставить только
-страницы со score от 0.1 до 0.9 через `--uncertain-only` и ограничить число
-строк через `--limit N`. Изображения подключаются относительными путями, поэтому
-HTML можно открыть локально в браузере.
-
-## Preprocess music pages for OMR
-
-Для нормализации контраста и бинаризации страниц, отмеченных
-`has_music == 1`, выполните:
-
-```bash
-python scripts/preprocess_music_pages.py --labels data/labels/pages_validated.csv --out-dir outputs/preprocessed
-```
-
-Обработанные изображения сохраняются как
-`outputs/preprocessed/<doc_id>/page_XXX_binary.png`, а постраничный отчёт — в
-`outputs/reports/preprocessing_report.csv`. Ошибка одной страницы не
-останавливает обработку остальных.
-
-## Run Audiveris OMR
-
-Экспериментальный запуск Audiveris CLI для одной предобработанной страницы:
-
-```bash
-python scripts/run_audiveris_omr.py --input outputs/preprocessed/rsl01004470876/page_002_binary.png --out-dir outputs/omr/rsl01004470876
-```
-
-Batch-режим обрабатывает только строки с `has_music == 1`:
-
-```bash
-python scripts/run_audiveris_omr.py --labels data/labels/pages_validated.csv --preprocessed-dir outputs/preprocessed --out-dir outputs/omr --limit 3
-```
-
-Если команда Audiveris недоступна в `PATH`, укажите путь через
-`--audiveris-bin`. Stdout/stderr сохраняются в логах рядом с OMR-результатами,
-а общий отчёт записывается в `outputs/reports/omr_report.csv`.
-
-## Build OMR candidates
-
-Для создания списка валидированных нотных страниц, подходящих для OMR:
-
-```bash
-python scripts/build_omr_candidates.py --labels data/labels/pages_validated.csv --out outputs/reports/omr_candidates.csv
-```
-
-В список попадают только строки с `has_music == 1` и `page_type == "music"`.
-Колонка `preprocessed_path` указывает на ожидаемое бинарное изображение, а
-`exists` показывает, создан ли файл. Доступны фильтр `--doc-id` и ограничение
-`--limit N`.
-
-### Expanded OMR evaluation sample
-
-Для воспроизводимого эксперимента ВКР на 300 страницах используется
-приоритетная выборка из существующих PNG. В неё сначала включаются прежние OMR
-failures, recovered fallback-страницы, расхождения CNN/Random Forest, mixed и
-low-confidence страницы; оставшиеся места заполняются случайными музыкальными
-кандидатами с фиксированным seed.
+Run the local review app:
 
 ```powershell
-python scripts/build_omr_eval_sample.py `
-  --labels data/labels/pages_validated_thesis.csv `
-  --pages-dir outputs/pages `
-  --out data/labels/omr_eval_sample_300_thesis.csv `
-  --summary outputs/reports/omr_eval_sample_300_summary.md `
-  --sample-size 300 `
-  --random-seed 42
-```
-
-После сборки выборки основной OMR запускается отдельно:
-
-```powershell
-python scripts/extract_omr_pages.py --candidates data/labels/omr_eval_sample_300_thesis.csv --raw-dir data/raw --out-dir outputs/omr_pages_300_sample --dpi 300
-python scripts/run_audiveris_omr.py --candidates data/labels/omr_eval_sample_300_thesis.csv --omr-pages-dir outputs/omr_pages_300_sample --out-dir outputs/omr_300dpi_sample --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe" --resume --skip-existing
-```
-
-Выборка является приоритетной диагностической, а не полностью случайной:
-technical success rate по ней нужно показывать отдельно от результата
-предыдущего эксперимента `141/150`.
-Наличие `sample_group` означает, что строки уже отобраны builder-скриптом:
-OMR adapter не отбрасывает включённые disagreement/false-positive страницы по
-их ручному `page_type`.
-
-Результат завершённого эксперимента:
-
-- primary 300 DPI: MXL `240/300` (80.00%), MIDI `239/300` (79.67%);
-- 400 DPI fallback: восстановлено 16 из 60 primary failures;
-- preprocessing fallback: восстановлена 1 из оставшихся 44 страниц;
-- combined technical availability: MXL `257/300` (85.67%), MIDI `256/300`
-  (85.33%).
-
-Подробная интерпретация приведена в
-[`docs/thesis/omr_eval_300_results.md`](docs/thesis/omr_eval_300_results.md).
-Показатели отражают наличие файлов, а не музыкальную правильность содержимого.
-
-Primary report для конкретных каталогов формируется так:
-
-```powershell
-python scripts/evaluate_omr_pipeline.py `
-  --sample data/labels/omr_eval_sample_300_thesis.csv `
-  --omr-dir outputs/omr_eval_300 `
-  --midi-dir outputs/midi_eval_300 `
-  --out outputs/reports/omr_eval_300_pipeline_report.csv `
-  --markdown-out outputs/reports/omr_eval_300_primary.md
-```
-
-Generated Markdown сохраняет фактические значения `--sample`, `--omr-dir`,
-`--midi-dir` и `--out`, использованные при запуске.
-
-### One-command OMR evaluation pipeline
-
-Для MVP полный цикл primary OMR, MIDI conversion, 400 DPI fallback,
-preprocessing fallback и combined evaluation запускается одной командой:
-
-```powershell
-python scripts/run_omr_eval_pipeline.py `
-  --sample data/labels/omr_eval_sample_300_thesis.csv `
-  --pages-dir outputs/pages `
-  --raw-dir data/raw `
-  --out-root outputs/omr_eval_300_pipeline `
-  --reports-dir outputs/reports `
-  --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe" `
-  --resume
-```
-
-Для короткой технической проверки можно добавить `--limit 3`. При `--resume`
-уже существующие 300 DPI страницы, MXL и MIDI не создаются повторно.
-
-Артефакты каждого этапа сохраняются отдельно внутри `--out-root`, а в
-`--reports-dir` формируются:
-
-- primary document report;
-- primary page failures;
-- 400 DPI fallback report;
-- preprocessing fallback report;
-- final combined page-level CSV;
-- итоговый Markdown summary.
-
-Отдельные команды `run_audiveris_omr.py`, `convert_mxl_to_midi.py`,
-`run_omr_fallback_dpi.py`, `run_omr_preprocessing_fallback.py` и
-`evaluate_omr_pipeline.py` остаются доступными для изолированных
-исследовательских запусков. Рекомендуемый MVP workflow использует orchestrator.
-Подробности: [`docs/thesis/omr_pipeline_orchestration.md`](docs/thesis/omr_pipeline_orchestration.md).
-
-## Run OMR from candidates
-
-Рекомендуемый процесс: сначала повторно извлечь OMR-кандидатов из исходных PDF
-при 300 DPI, затем передать high-resolution страницы в Audiveris:
-
-```bash
-python scripts/extract_omr_pages.py --candidates outputs/reports/omr_candidates.csv --raw-dir data/raw --out-dir outputs/omr_pages --dpi 300
-python scripts/run_audiveris_omr.py --candidates outputs/reports/omr_candidates.csv --omr-pages-dir outputs/omr_pages --out-dir outputs/omr --limit 10 --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
-```
-
-Для thesis workflow промежуточное преобразование CSV не требуется:
-
-```bash
-python scripts/extract_omr_pages.py --candidates data/labels/omr_eval_sample_thesis.csv --raw-dir data/raw --out-dir outputs/omr_pages --dpi 300
-python scripts/run_audiveris_omr.py --candidates data/labels/omr_eval_sample_thesis.csv --omr-pages-dir outputs/omr_pages --out-dir outputs/omr_300dpi --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
-```
-
-Поддерживаются старый формат с `exists` и `preprocessed_path`, новый thesis
-формат с `image_path`, `page_type` и `has_music` либо `has_music_manual`, а
-также смешанные CSV. В
-смешанной строке заполненный `preprocessed_path` сохраняет старое поведение;
-иначе используется `image_path`.
-
-При `--omr-pages-dir` вход строится как
-`outputs/omr_pages/<doc_id>/page_XXX.png`; отсутствующие high-resolution файлы
-получают статус `failed` без запуска Audiveris. Без этого аргумента сохраняется
-старый режим: используются `preprocessed_path` и строки с `exists == True`.
-Результаты каждой страницы сохраняются в `outputs/omr/<doc_id>/page_XXX/`.
-Колонка `input_kind` в `omr_report.csv` показывает использованный источник.
-
-## Extract high-resolution OMR pages
-
-Для повторного извлечения только OMR-кандидатов из исходных PDF при 300 DPI:
-
-```bash
-python scripts/extract_omr_pages.py --candidates outputs/reports/omr_candidates.csv --raw-dir data/raw --out-dir outputs/omr_pages --dpi 300
-python scripts/extract_omr_pages.py --candidates data/labels/omr_eval_sample_thesis.csv --raw-dir data/raw --out-dir outputs/omr_pages --dpi 300
-```
-
-Опция `--limit N` ограничивает число страниц для быстрой проверки. Результаты
-сохраняются в `outputs/omr_pages/<doc_id>/page_XXX.png`, а отчёт — в
-`outputs/reports/omr_pages_report.csv`. Каталог `outputs/pages` не изменяется:
-он остаётся источником страниц основного pipeline, а `outputs/omr_pages`
-используется только для Audiveris/OMR.
-
-## Summarize OMR results
-
-Для сводки статусов Audiveris и созданных `.mxl` файлов:
-
-```bash
-python scripts/summarize_omr_results.py --omr-report outputs/reports/omr_report.csv --omr-dir outputs/omr_300dpi --out outputs/reports/omr_summary.json
-```
-
-JSON содержит число успешных и неуспешных страниц, success rate, статистику
-размеров `.mxl`, список успешных страниц с путями к результатам и список ошибок.
-
-## Convert MXL to MIDI
-
-Для преобразования одного результата Audiveris в MIDI:
-
-```bash
-python scripts/convert_mxl_to_midi.py --input outputs/omr_300dpi/rsl01001872102/page_013/page_013.mxl --out outputs/midi/page_013.mid
-```
-
-Пакетная конвертация рекурсивно находит все `.mxl` и сохраняет MIDI по
-документам:
-
-```bash
-python scripts/convert_mxl_to_midi.py --input-dir outputs/omr_300dpi --out-dir outputs/midi --limit 10
-```
-
-При ошибках repeat-разметки конвертер сначала удаляет repeat-barline и
-`RepeatExpression`, а затем при необходимости использует плоский поток
-`notesAndRests`. Режим конвертации и ошибки сохраняются в
-`outputs/reports/midi_conversion_report.csv`.
-
-## Extract music-theoretical features
-
-Характеристики, явно записанные в MXL/MusicXML, извлекаются через `music21`:
-тональность, размер, ключи, партии, инструменты и число тактов. Результат
-используется document dashboard и страницей отдельного скана.
-
-Рекомендуемый запуск по OMR-отчёту:
-
-```powershell
-python scripts/extract_music_features.py --omr-report outputs/reports/omr_pipeline_report.csv --out outputs/reports/music_features.csv
-```
-
-Extractor читает явные пути MXL/MIDI из постраничного отчёта. Для агрегированного
-отчёта по документам он ищет MusicXML в известных primary и fallback-каталогах.
-Отсутствующий или повреждённый файл сохраняется отдельной строкой и не
-останавливает batch.
-
-Также поддерживается рекурсивный обход одного или нескольких каталогов:
-
-```powershell
-python scripts/extract_music_features.py --input-dir outputs/omr --out outputs/reports/music_features.csv --recursive
-```
-
-Для объединённого прохода по primary и fallback-результатам аргумент можно
-повторять:
-
-```powershell
-python scripts/extract_music_features.py --input-dir outputs/omr_300dpi --input-dir outputs/omr_400dpi_fallback --input-dir outputs/omr_preprocessed_fallback --out outputs/reports/music_features.csv --recursive
-```
-
-- `source=musicxml` означает, что тональность прочитана непосредственно из
-  MusicXML;
-- `source=not_found` означает, что значение отсутствует и extractor его не
-  выдумывает;
-- `confidence` — числовая оценка полноты извлечённых явных признаков от `0.0`
-  до `1.0`, а не оценка музыкальной корректности OMR;
-- `extraction_status` принимает значения `success`, `no_key`,
-  `no_time_signature`, `parse_error` или `missing_file`.
-
-Если key signature присутствует, но лад в MusicXML не указан, extractor не
-угадывает его по нотам и сохраняет обе допустимые тональности, например
-`D-dur / b-moll`, в полях `key_signature_name_*`. При этом
-`detected_tonality_*=unknown` и `mode_status=unknown`: это интерпретация
-ключевых знаков, а не точно определённая тональность. Старые поля
-`key_name_latin` и `key_name_ru` сохранены для обратной совместимости.
-
-Битые и пустые файлы не останавливают batch: для них сохраняется
-`extraction_status=parse_error` и диагностическое поле `error`.
-
-## Manual Review Workflow
-
-1. Построить редактируемую статическую галерею:
-
-   ```bash
-   python scripts/build_editable_review_gallery.py --labels data/labels/pages_review_priority_thesis.csv --out outputs/reports/thesis_editable_review_gallery.html
-   ```
-
-2. Открыть HTML в браузере и разметить страницы. Изменения автоматически
-   отмечаются и сохраняются в `localStorage`.
-3. Экспортировать `thesis_label_corrections.csv`.
-4. Применить corrections к основной thesis-разметке:
-
-   ```bash
-   python scripts/apply_label_corrections.py --labels data/labels/pages_validated_thesis.csv --corrections data/labels/thesis_label_corrections.csv --out data/labels/pages_validated_thesis.csv
-   ```
-
-5. Построить отчёт о составе и качестве документов:
-
-   ```bash
-   python scripts/build_document_quality_report.py --labels data/labels/pages_validated_thesis.csv --out outputs/reports/document_quality_report.csv
-   ```
-
-6. Построить отчёт об ошибках detector:
-
-   ```bash
-   python scripts/build_detector_error_report.py --labels data/labels/pages_validated_thesis.csv --out outputs/reports/detector_error_report.csv
-   ```
-
-7. Пересчитать итоговые метрики после применения ручных исправлений.
-
-Подробные правила типов страниц и комментариев приведены в
-`docs/thesis/labeling_guidelines.md`.
-
-## OMR Expert Review Web App
-
-Локальное FastAPI-приложение позволяет музыканту проверять сканы, общее аудио
-и отдельные партии через защищённую паролем страницу. Оценки сохраняются в
-SQLite и экспортируются в CSV, совместимый с thesis-таблицей экспертной
-оценки.
-
-Все эксперты используют общий `REVIEW_APP_PASSWORD`, но при входе обязательно
-указывают своё имя. Имя нормализуется без учёта регистра и лишних пробелов:
-повторный вход под тем же именем продолжает прежний прогресс. Оценки разных
-музыкантов хранятся независимо.
-
-На каждой странице достаточно выбрать пригодность результата, поставить общую
-оценку от 1 до 5, отметить заметные проблемы и при необходимости оставить
-комментарий. Дата завершения подставляется автоматически. Подсчёт тактов и нот
-доступен в необязательном раскрывающемся блоке «Расширенная количественная
-оценка».
-
-На странице проверки также доступны защищённые ссылки для скачивания общего
-аудио, отдельных MP3-дорожек, MIDI и MXL/MusicXML. Ссылки MIDI/MXL
-показываются только при наличии соответствующего файла в экспертном пакете
-или стандартных каталогах `outputs/midi`, `outputs/omr_300dpi` и
-`outputs/omr`. Файлы выдаются после авторизации и не раскрывают абсолютные
-локальные пути.
-
-Установка и импорт плоского пакета:
-
-```bat
-pip install -r requirements.txt
-set REVIEW_APP_PASSWORD=replace-with-a-strong-password
-python -m review_app.import_package --package-dir outputs/expert_review_for_send
+$env:REVIEW_APP_PASSWORD = "change-me"
 uvicorn review_app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Для пароля с кириллицей в PowerShell используйте переменную окружения напрямую:
+Run tests:
 
 ```powershell
-$env:REVIEW_APP_PASSWORD = "Надёжный-пароль-2026"
-python -m review_app.import_package --package-dir outputs/expert_review_for_send
-uvicorn review_app.main:app --host 127.0.0.1 --port 8000
+python -m unittest discover -s tests
 ```
 
-На странице входа эксперт вводит общий пароль и своё имя. Имя определяет
-независимый прогресс эксперта, поэтому каждому музыканту нужно использовать
-одно и то же написание имени при повторных входах.
-
-Текущая версия показывает всем экспертам один и тот же импортированный набор
-из 30 страниц. Разделение выполняется на уровне прогресса и оценок. В схеме
-данных зарезервировано поле `review_set`, чтобы позднее назначать разным
-экспертам разные наборы без изменения модели review.
-
-После запуска приложение доступно по адресу `http://127.0.0.1:8000`.
-Экспорт находится по защищённому маршруту
-`/export/expert_review.csv`.
-
-Дополнительные переменные:
-
-```text
-REVIEW_APP_DB=review_app/review_app.db
-REVIEW_PACKAGE_DIR=outputs/expert_review_for_send
-```
-
-SQLite-файл, сканы и аудио не коммитятся. Для внешнего доступа можно временно
-использовать HTTPS-туннель к `127.0.0.1:8000`, но туннель следует включать
-только на время согласованной экспертной проверки и выключать сразу после
-сеанса. Используйте уникальный сильный пароль и не публикуйте ссылку открыто.
-
-Пример временного туннеля через `cloudflared`:
+Run timing and availability analyses:
 
 ```powershell
-cloudflared tunnel --url http://127.0.0.1:8000
+python scripts/benchmark_pipeline_stages.py --sample-size 50 --only-existing-omr --include-music-features --output outputs/reports/music_features_timing_report.md
+python scripts/analyze_all_pages_music_features_availability.py
+python scripts/benchmark_omr_timing_sample.py --sample-size 10 --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
 ```
 
-### Мониторинг и экспорт экспертной проверки
-
-Полный CSV можно выгрузить из SQLite без запуска web-приложения. Команда
-открывает БД только для чтения и не выполняет миграции:
+Run the safe experimental parallel batch runner:
 
 ```powershell
-python -m review_app.export_csv `
-  --db review_app/review_app.db `
-  --out outputs/reports/expert_review.csv
+python scripts/run_omr_batch_parallel.py --max-pages 20 --workers 2 --only-without-mxl --dry-run
+python scripts/run_omr_batch_parallel.py --max-pages 10 --workers 2 --only-without-mxl --run --output-dir outputs/omr_batch_parallel_test --midi-output-dir outputs/midi_batch_parallel_test --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
 ```
 
-Для итогового анализа обычно нужны только завершённые оценки без локальных
-тестовых пользователей:
+Run the experimental toy neural OMR prototype:
 
 ```powershell
-python -m review_app.export_csv `
-  --db review_app/review_app.db `
-  --out outputs/reports/expert_review_export.csv `
-  --completed-only `
-  --exclude-reviewer local `
-  --exclude-reviewer Igor `
-  --exclude-reviewer Музыкант1 `
-  --exclude-reviewer Музыкант2 `
-  --exclude-reviewer Музыкант3
+python scripts/train_neural_omr_toy.py --epochs 1 --batch-size 4 --image-size 224 --max-samples 100 --output-dir outputs/experiments/neural_omr_toy
+python scripts/evaluate_neural_omr_toy.py --output-dir outputs/experiments/neural_omr_toy
+python scripts/compare_neural_vs_audiveris_timing.py --model-dir outputs/experiments/neural_omr_toy
 ```
 
-Прогресс по экспертам:
+## Data Policy
 
-```powershell
-python scripts/review_progress.py `
-  --db review_app/review_app.db `
-  --total 30 `
-  --exclude-reviewer local `
-  --exclude-reviewer Igor `
-  --exclude-reviewer Музыкант1 `
-  --exclude-reviewer Музыкант2 `
-  --exclude-reviewer Музыкант3 `
-  --markdown-out outputs/reports/expert_review_progress.md
-```
+- Raw PDFs/MRC files remain local.
+- Generated outputs remain local.
+- Do not add `outputs/`, `model.pt`, MXL/MusicXML, MIDI, PNG/JPG scans, PDF, DOCX, PPTX or review databases to Git.
+- Git should track source code, tests and lightweight documentation/notes only.
 
-В таблице `filled = completed + draft`, а `progress = filled / total`.
+## Limitations
 
-### Excluding invalid/test reviewers
+- Audiveris is CPU/Java-based and is the main runtime bottleneck.
+- GPU does not directly accelerate Audiveris.
+- Technical success is not musical correctness.
+- Music features are extracted from MXL/MusicXML, not directly from PNG pages.
+- Absence of music features does not mean absence of music on a scanned page.
+- Full neural OMR requires expert-verified image-to-MusicXML ground truth.
+- Search or identification against a music database is future work.
 
-Некорректные или тестовые оценки не удаляются из SQLite. Они исключаются
-воспроизводимо на уровне read-only экспорта, мониторинга и расчёта метрик с
-помощью повторяемого флага `--exclude-reviewer`. Например, оценки `Igor`
-сохраняются в базе для аудита, но не входят в итоговые показатели:
+## Defense Note
 
-```powershell
-python -m review_app.export_csv `
-  --db review_app/review_app.db `
-  --out outputs/reports/expert_review_export.csv `
-  --completed-only `
-  --exclude-reviewer local `
-  --exclude-reviewer Igor `
-  --exclude-reviewer Музыкант1 `
-  --exclude-reviewer Музыкант2 `
-  --exclude-reviewer Музыкант3
-
-python scripts/review_progress.py `
-  --db review_app/review_app.db `
-  --total 30 `
-  --exclude-reviewer local `
-  --exclude-reviewer Igor `
-  --exclude-reviewer Музыкант1 `
-  --exclude-reviewer Музыкант2 `
-  --exclude-reviewer Музыкант3
-```
-
-Список включённых и исключённых экспертов фиксируется в Markdown summary
-метрик. Это позволяет повторить расчёт без удаления исходных оценок.
-
-## Expert review metrics
-
-После экспорта оценок из `/export/expert_review.csv` рассчитайте экспертные
-метрики:
-
-```bash
-python scripts/calculate_expert_review_metrics.py --input path/to/expert_review.csv
-```
-
-Для отчёта только по завершённым оценкам и без тестовых экспертов:
-
-```powershell
-python scripts/calculate_expert_review_metrics.py `
-  --input outputs/reports/expert_review_export.csv `
-  --completed-only `
-  --exclude-reviewer local `
-  --exclude-reviewer Igor `
-  --exclude-reviewer Музыкант1 `
-  --exclude-reviewer Музыкант2 `
-  --exclude-reviewer Музыкант3
-```
-
-Результаты сохраняются в
-`outputs/reports/expert_review_metrics.csv` и
-`outputs/reports/expert_review_summary.md`. Качественные метрики считаются
-только по завершённым отзывам. Пустые количественные поля исключаются из
-расчёта и не заменяются нулями.
-
-Формулы:
-
-- measure accuracy = `sum(correct_measures) / sum(checked_measures)`;
-- note event error rate =
-  `sum(pitch_errors + duration_errors + missing_notes + extra_notes) /
-  sum(reference_notes)`;
-- pitch/duration error rate используют `matched_notes` как знаменатель;
-- missing/extra note rate используют `reference_notes` как знаменатель.
-
-Техническая успешность создания MXL/MIDI `141/150` приводится в Markdown только
-как отдельный контекст и не смешивается с экспертной оценкой музыкального
-содержания.
-
-## OMR failure review
-
-Постраничный отчёт `outputs/reports/omr_failure_report.csv` можно импортировать
-в тот же защищённый web-интерфейс:
-
-```bash
-python -m review_app.import_failures --report outputs/reports/omr_failure_report.csv
-```
-
-Импорт сопоставляет failure с
-`outputs/pages/<doc_id>/page_XXX.png`, ищет лог в
-`outputs/omr_300dpi/<doc_id>/page_XXX/` и при наличии thesis labels добавляет
-`page_type`. Агрегированный `omr_pipeline_report.csv` сам по себе не содержит
-номеров failed-страниц, поэтому для импорта нужен постраничный failure report.
-
-После запуска приложения откройте `http://127.0.0.1:8000/failures`. Раздел
-доступен только после входа и позволяет классифицировать причину сбоя, выбрать
-решение, сохранить черновик или отметить страницу как разобранную.
-
-Результат выгружается через `/export/failure_review.csv`. CSV совместим с
-`data/labels/omr_failure_expert_review_thesis.csv` и может использоваться в ВКР
-для таблицы причин OMR-сбоев, решений по повторному запуску и анализа связи
-ошибок с качеством или типом страницы.
-
-The failure page also contains a `Page classification review` block. It records
-the corrected page type, corrected `has_music`, whether the page should be sent
-to OMR, and the classifier error type. Optional `has_music_manual`,
-`cnn_prediction`, `classical_prediction`, `sample_group`, and `source_reason`
-columns are imported when present in the labels or sample CSV.
-
-Use the filters on `/failures` to isolate classifier false positives,
-non-music pages sent to OMR, real OMR failures, and pages still failed after
-all fallbacks. `/export/failure_review.csv` includes these corrections and can
-be used as a reviewed hard-negative dataset for page-classifier retraining.
-The original `page_type` remains separate from the corrected value.
-
-## Experimental pre-OMR filter
-
-The pre-OMR filter is an experimental routing step before Audiveris. It reads a
-candidate CSV and page PNG files, extracts lightweight visual features, and
-marks obvious non-music pages as `send_to_omr=false`.
-
-```powershell
-python scripts/evaluate_pre_omr_filter.py `
-  --candidates data/labels/omr_eval_sample_300_thesis.csv `
-  --pages-dir outputs/pages `
-  --failure-review outputs/reports/failure_review.csv `
-  --out outputs/reports/pre_omr_filter_eval.md `
-  --predictions-out outputs/reports/pre_omr_filter_predictions.csv
-```
-
-The report checks the filter against the manual failure-review export:
-
-- how many `false_positive_music` pages would have been filtered before OMR;
-- how many real `music` / `mixed` pages would have been wrongly excluded.
-
-This filter is intentionally conservative and is not part of the main OMR
-metric unless explicitly enabled in an experiment.
-
-## OMR fallback at 400 DPI
-
-400 DPI используется только как fallback-эксперимент для страниц, на которых
-основной OMR при 300 DPI не создал MXL. Результаты сохраняются отдельно и не
-перезаписывают `outputs/omr_300dpi` или основную метрику `141/150`.
-
-```bat
-python scripts/run_omr_fallback_dpi.py ^
-  --omr-report outputs/reports/omr_pipeline_report.csv ^
-  --pages-dir outputs/pages ^
-  --out-dir outputs/omr_400dpi_fallback ^
-  --midi-dir outputs/midi_400dpi_fallback ^
-  --dpi 400 ^
-  --resume ^
-  --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
-```
-
-Агрегированный pipeline report используется для исходного размера выборки и
-primary success. Номера страниц автоматически читаются из соседнего
-`outputs/reports/omr_failure_report.csv`. Для честного 400 DPI исходная страница
-переизвлекается из PDF в `data/raw`; масштабирование старого PNG не выполняется.
-
-Результаты:
-
-- `outputs/reports/omr_400dpi_fallback_report.csv`;
-- `outputs/reports/omr_400dpi_fallback_summary.md`;
-- MXL и логи в `outputs/omr_400dpi_fallback`;
-- MIDI в `outputs/midi_400dpi_fallback`.
-
-`fallback_recovery_rate` показывает долю fallback-попыток, восстановивших MXL.
-`combined_success_rate` считается отдельно как доля исходной OMR-выборки,
-успешной по полному пути MXL+MIDI после primary 300 DPI и fallback 400 DPI.
-После эксперимента повторите импорт failures, чтобы статус появился в UI:
-
-```bash
-python -m review_app.import_failures --report outputs/reports/omr_failure_report.csv
-```
-
-## OMR preprocessing fallback
-
-Если страницы не дали MXL ни при основном OMR 300 DPI, ни при fallback 400 DPI,
-можно отдельно проверить четыре варианта подготовки изображения:
-`crop_page`, `crop_deskew`, `crop_deskew_clahe` и
-`crop_deskew_adaptive_threshold`.
-
-```bat
-python scripts/run_omr_preprocessing_fallback.py ^
-  --failures-report outputs/reports/omr_400dpi_fallback_report.csv ^
-  --pages-dir outputs/pages ^
-  --out-dir outputs/omr_preprocessed_fallback ^
-  --midi-dir outputs/midi_preprocessed_fallback ^
-  --resume ^
-  --audiveris-bin "C:\Program Files\Audiveris\Audiveris.exe"
-```
-
-Скрипт предпочитает уже извлечённое изображение 400 DPI и использует
-`outputs/pages` только как резервный источник. Каждый preprocessing-вариант
-получает отдельные изображение, каталог Audiveris, лог, MXL и MIDI. Основные
-`outputs/omr_300dpi` и `outputs/omr_400dpi_fallback` не изменяются.
-
-Отчёты:
-
-- `outputs/reports/omr_preprocessing_fallback_report.csv`;
-- `outputs/reports/omr_preprocessing_fallback_summary.md`.
-
-Это экспериментальный recovery-этап, а не замена основной OMR-метрики. После
-прогона повторите импорт failure review: UI и CSV покажут общий preprocessing
-status и лучший recovered variant.
-
-```bash
-python -m review_app.import_failures --report outputs/reports/omr_failure_report.csv
-```
-
-## Run corpus analysis
-
-После добавления PDF/MRC в `data/inbox` основной корпус можно обновить одной
-командой:
-
-```bat
-python scripts/run_corpus_analysis.py ^
-  --inbox data/inbox ^
-  --raw-dir data/raw ^
-  --pages-dir outputs/pages ^
-  --labels-dir data/labels ^
-  --reports-dir outputs/reports ^
-  --docs-dir docs/thesis ^
-  --resume
-```
-
-Orchestrator последовательно запускает существующие скрипты импорта,
-инвентаризации, извлечения PDF-страниц, detector, построения labels template,
-статистики корпуса и detector/error reports. Если уже существует
-`pages_validated_thesis.csv`, ручные метки переносятся в обновлённую разметку
-через `merge_validated_labels.py`.
-
-Проверить план без создания или изменения файлов:
-
-```bat
-python scripts/run_corpus_analysis.py ^
-  --inbox data/inbox ^
-  --raw-dir data/raw ^
-  --pages-dir outputs/pages ^
-  --labels-dir data/labels ^
-  --reports-dir outputs/reports ^
-  --docs-dir docs/thesis ^
-  --dry-run
-```
-
-Поддерживаются `--doc-id`, `--limit-docs`, `--skip-existing`, `--resume`,
-`--fail-fast` и `--continue-on-error`. Журнал сохраняется в
-`outputs/reports/corpus_analysis_run_log.csv`, сводка — в
-`outputs/reports/corpus_analysis_run_summary.md`.
-
-По умолчанию скрипт **не запускает Audiveris и OMR**. Сформировать только
-управляемую OMR-выборку можно флагом `--prepare-omr-sample`. Полный отдельный
-OMR-запуск включается только явно через `--run-omr` и при необходимости
-`--audiveris-bin`.
-
-## Данные и результаты
-
-Реальные PDF/MRC-файлы хранятся локально в `data/raw/`, а сгенерированные
-результаты — в `outputs/`. Содержимое этих каталогов не коммитится.
-Файлы `.gitkeep` используются только для сохранения структуры каталогов.
+This repository contains the engineering MVP for the VKR project. Experimental modules are included for research and future-work analysis. They do not change the final VKR metrics and do not replace the Audiveris baseline.
